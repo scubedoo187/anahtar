@@ -1,0 +1,31 @@
+# OS/editor noise
+.DS_Store
+*.swp
+*.swo
+*~
+
+# Rust build outputs
+/target/
+**/target/
+
+# Local/private KeePass vaults and generated vault outputs
+/assets/
+*.kdbx
+*.kdb
+*.key
+*.keyx
+
+# Keep generated synthetic vaults out of git; regenerate with the example.
+/test-vaults/generated/
+/test-vaults/strongbox/
+
+# Spike generated/downloaded data
+/spikes/keepass-compat/fixtures/
+/spikes/keepass-compat/out/
+
+# Local env/secrets
+.env
+.env.*
+!.env.example
+/secrets/
+/.secrets/

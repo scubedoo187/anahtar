@@ -1,0 +1,11 @@
+[package]
+name = "keepass-compat-spike"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+anyhow = "1"
+keepass = { version = "0.13.8", features = ["save_kdbx4", "totp"] }
+rpassword = "7"
+
