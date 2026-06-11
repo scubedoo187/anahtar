@@ -182,10 +182,11 @@ The active implementation phase is Phase 1. The canonical detailed plan is `docs
 
 #### Phase 4 exit criteria
 
-- CLI is usable for common daily retrieval tasks.
-- Clipboard copy clears after a timeout.
-- Default vault config is supported.
-- No secrets appear in logs or normal command output.
+- [x] CLI is usable for common daily retrieval tasks.
+- [x] Clipboard copy clears after a timeout.
+- [x] Default vault config is supported.
+- [x] No secrets appear in logs or normal command output.
+- [x] Config/default vault, `--vault` override, generate, copy, and TOTP workflows were manually verified.
 
 ### Phase 5 — GUI alpha planning
 
