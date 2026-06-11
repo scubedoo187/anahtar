@@ -1,6 +1,6 @@
-# Anahtar entire roadmap
+# Anahtar roadmap
 
-This document is the high-level roadmap record for Anahtar. It captures the path from the current CLI MVP toward a personal Strongbox/paid-password-manager replacement workflow.
+This document is the high-level roadmap record for Anahtar. It captures the path from the CLI foundation toward a personal Strongbox/paid-password-manager replacement workflow.
 
 ## Roadmap baseline
 
@@ -67,20 +67,18 @@ Deliverables:
 - clipboard copy with timed clear
 - TOTP display/copy
 - `add --generate-password`
-- module split/settlement before next phase
+- module split/settlement before productization
 
 ### Phase 5 — CLI Password Manager Productization
 
-Status: next
+Status: complete
 
 Goal: make Anahtar a credible password-manager CLI product before starting GUI work.
 
-Rationale: GUI work should mostly assemble stable core capabilities. If password-manager functionality is still missing, the GUI phase will repeatedly force core/CLI rewrites.
-
 Deliverables:
 
-- credential material abstraction, including key-file support if supported by backend
-- safe in-place update workflow as the default write path, with backup, temp save, atomic replace, and reopen verification
+- credential material abstraction, including key-file support
+- safe in-place update workflow as the default write path, with backup, temp save, replacement, and reopen verification
 - stable explicit selector model
 - group organization including list/add/rename/delete and entry move support
 - audit/check commands that never print secrets
@@ -91,27 +89,51 @@ Canonical plan:
 
 - `docs/phase-plans/phase-5-cli-password-manager-productization.md`
 
-### Phase 6 — GUI alpha
+### Phase 5.5 — UI Readiness Cleanup
 
-Status: deferred until Phase 5 completion
+Status: complete
 
-Goal: build a desktop GUI using the same core capabilities stabilized by the CLI productization phase.
+Goal: reduce architectural friction before GUI work begins.
 
 Deliverables:
 
-- Tauri-based GUI candidate
+- `anahtar-core` public module facade
+- thinner CLI dispatch structure
+- `anahtar-app` stateless service facade for GUI/CLI reuse
+- GUI API contract documentation
+- stronger CI/product smoke checks
+- README/PLAN/product-readiness updates
+
+Canonical plan:
+
+- `docs/phase-plans/phase-5-5-ui-readiness-cleanup.md`
+
+### Phase 6 — GUI Alpha
+
+Status: accepted / ready to implement
+
+Goal: build a macOS-first desktop GUI using the same capabilities stabilized by the CLI and exposed through `anahtar-app`.
+
+Deliverables:
+
+- Tauri + TypeScript GUI under `apps/anahtar-gui`
 - open/configure vault
-- unlock/search/list/detail/copy
+- optional key-file path
+- unlock/list/search/detail workflows
+- explicit reveal/copy flows for sensitive values
+- GUI-owned clipboard clear behavior
 - add/edit/delete using the CLI-proven safe write model
-- group/audit UI if Phase 5 exposes stable APIs
+- group/audit UI if alpha complexity remains manageable
 - macOS local packaging first, Windows/Linux later
 
 Canonical plan:
 
 - `docs/phase-plans/phase-6-gui-alpha.md`
 
-## Roadmap rule
+## Strategic rules
 
-This roadmap is intentionally broad and should not be rewritten every time implementation details change. Detailed phase plans live separately and are updated as each phase begins/completes.
-
-Major strategy changes should be reflected here only when they affect phase ordering or product definition.
+- GUI code should call `anahtar-app::AnahtarService`, not reimplement KDBX traversal or write safety.
+- `anahtar-core` remains the KDBX domain layer.
+- `anahtar-cli` remains a supported product surface, not a throwaway prototype.
+- Major strategy changes should be reflected here only when they affect phase ordering or product definition.
+- Detailed implementation checklists live in per-phase plans.
