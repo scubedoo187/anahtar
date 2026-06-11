@@ -61,8 +61,10 @@ Duplicate selector errors are expected and should be shown as actionable validat
 Use `AnahtarService` write methods with `WriteMode`:
 
 - `WriteMode::SaveAs { output_path, force }`
-- `WriteMode::InPlace { target_path, backup_dir }`
+- `WriteMode::InPlace { backup_dir }`
 - `WriteMode::DryRun`
+
+For in-place writes, the service method's `path` argument is the target vault. `WriteMode::InPlace` intentionally does not repeat the target path, avoiding ambiguous calls where input and target differ.
 
 Supported methods:
 

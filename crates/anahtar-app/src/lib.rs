@@ -18,14 +18,8 @@ use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone)]
 pub enum WriteMode {
-    SaveAs {
-        output_path: PathBuf,
-        force: bool,
-    },
-    InPlace {
-        target_path: PathBuf,
-        backup_dir: Option<PathBuf>,
-    },
+    SaveAs { output_path: PathBuf, force: bool },
+    InPlace { backup_dir: Option<PathBuf> },
     DryRun,
 }
 
@@ -92,22 +86,20 @@ impl AnahtarService {
         request: AddEntryRequest,
         mode: WriteMode,
     ) -> Result<Option<WriteReport>> {
+        let input_path = path.as_ref();
         match mode {
             WriteMode::DryRun => Ok(None),
             WriteMode::SaveAs { output_path, force } => add_entry_save_as_with_credentials(
-                path,
+                input_path,
                 credentials,
                 SaveAsOptions { output_path, force },
                 request,
             )
             .map(Some),
-            WriteMode::InPlace {
-                target_path,
-                backup_dir,
-            } => safe_in_place_write_with_credentials(
+            WriteMode::InPlace { backup_dir } => safe_in_place_write_with_credentials(
                 credentials,
                 InPlaceOptions {
-                    target_path,
+                    target_path: input_path.to_path_buf(),
                     backup_dir,
                 },
                 |input, output| {
@@ -133,23 +125,21 @@ impl AnahtarService {
         request: EditEntryRequest,
         mode: WriteMode,
     ) -> Result<Option<WriteReport>> {
+        let input_path = path.as_ref();
         match mode {
             WriteMode::DryRun => Ok(None),
             WriteMode::SaveAs { output_path, force } => edit_entry_save_as_with_credentials(
-                path,
+                input_path,
                 selector_id,
                 credentials,
                 SaveAsOptions { output_path, force },
                 request,
             )
             .map(Some),
-            WriteMode::InPlace {
-                target_path,
-                backup_dir,
-            } => safe_in_place_write_with_credentials(
+            WriteMode::InPlace { backup_dir } => safe_in_place_write_with_credentials(
                 credentials,
                 InPlaceOptions {
-                    target_path,
+                    target_path: input_path.to_path_buf(),
                     backup_dir,
                 },
                 |input, output| {
@@ -175,22 +165,20 @@ impl AnahtarService {
         entry_id: &str,
         mode: WriteMode,
     ) -> Result<Option<WriteReport>> {
+        let input_path = path.as_ref();
         match mode {
             WriteMode::DryRun => Ok(None),
             WriteMode::SaveAs { output_path, force } => delete_entry_save_as_with_credentials(
-                path,
+                input_path,
                 entry_id,
                 credentials,
                 SaveAsOptions { output_path, force },
             )
             .map(Some),
-            WriteMode::InPlace {
-                target_path,
-                backup_dir,
-            } => safe_in_place_write_with_credentials(
+            WriteMode::InPlace { backup_dir } => safe_in_place_write_with_credentials(
                 credentials,
                 InPlaceOptions {
-                    target_path,
+                    target_path: input_path.to_path_buf(),
                     backup_dir,
                 },
                 |input, output| {
@@ -215,22 +203,20 @@ impl AnahtarService {
         group_path: &str,
         mode: WriteMode,
     ) -> Result<Option<WriteReport>> {
+        let input_path = path.as_ref();
         match mode {
             WriteMode::DryRun => Ok(None),
             WriteMode::SaveAs { output_path, force } => add_group_save_as_with_credentials(
-                path,
+                input_path,
                 credentials,
                 SaveAsOptions { output_path, force },
                 group_path,
             )
             .map(Some),
-            WriteMode::InPlace {
-                target_path,
-                backup_dir,
-            } => safe_in_place_write_with_credentials(
+            WriteMode::InPlace { backup_dir } => safe_in_place_write_with_credentials(
                 credentials,
                 InPlaceOptions {
-                    target_path,
+                    target_path: input_path.to_path_buf(),
                     backup_dir,
                 },
                 |input, output| {
@@ -256,23 +242,21 @@ impl AnahtarService {
         new_name: &str,
         mode: WriteMode,
     ) -> Result<Option<WriteReport>> {
+        let input_path = path.as_ref();
         match mode {
             WriteMode::DryRun => Ok(None),
             WriteMode::SaveAs { output_path, force } => rename_group_save_as_with_credentials(
-                path,
+                input_path,
                 credentials,
                 SaveAsOptions { output_path, force },
                 group_path,
                 new_name,
             )
             .map(Some),
-            WriteMode::InPlace {
-                target_path,
-                backup_dir,
-            } => safe_in_place_write_with_credentials(
+            WriteMode::InPlace { backup_dir } => safe_in_place_write_with_credentials(
                 credentials,
                 InPlaceOptions {
-                    target_path,
+                    target_path: input_path.to_path_buf(),
                     backup_dir,
                 },
                 |input, output| {
@@ -298,22 +282,20 @@ impl AnahtarService {
         group_path: &str,
         mode: WriteMode,
     ) -> Result<Option<WriteReport>> {
+        let input_path = path.as_ref();
         match mode {
             WriteMode::DryRun => Ok(None),
             WriteMode::SaveAs { output_path, force } => delete_group_save_as_with_credentials(
-                path,
+                input_path,
                 credentials,
                 SaveAsOptions { output_path, force },
                 group_path,
             )
             .map(Some),
-            WriteMode::InPlace {
-                target_path,
-                backup_dir,
-            } => safe_in_place_write_with_credentials(
+            WriteMode::InPlace { backup_dir } => safe_in_place_write_with_credentials(
                 credentials,
                 InPlaceOptions {
-                    target_path,
+                    target_path: input_path.to_path_buf(),
                     backup_dir,
                 },
                 |input, output| {
@@ -339,23 +321,21 @@ impl AnahtarService {
         group_path: &str,
         mode: WriteMode,
     ) -> Result<Option<WriteReport>> {
+        let input_path = path.as_ref();
         match mode {
             WriteMode::DryRun => Ok(None),
             WriteMode::SaveAs { output_path, force } => move_entry_save_as_with_credentials(
-                path,
+                input_path,
                 credentials,
                 SaveAsOptions { output_path, force },
                 selector,
                 group_path,
             )
             .map(Some),
-            WriteMode::InPlace {
-                target_path,
-                backup_dir,
-            } => safe_in_place_write_with_credentials(
+            WriteMode::InPlace { backup_dir } => safe_in_place_write_with_credentials(
                 credentials,
                 InPlaceOptions {
-                    target_path,
+                    target_path: input_path.to_path_buf(),
                     backup_dir,
                 },
                 |input, output| {

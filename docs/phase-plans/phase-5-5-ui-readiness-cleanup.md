@@ -341,3 +341,4 @@ This phase should be implemented as small, reviewable commits. Each slice should
 - This phase should be completed before writing Tauri UI code.
 - Keep this phase mostly refactor/documentation/CI. Avoid major new user-facing features.
 - If `anahtar-app` becomes too thin, keep it anyway as the GUI contract boundary; it can grow naturally during Phase 6.
+- Implementation note: Phase 5.5 prioritized API boundary stability and behavior preservation. `anahtar-core` now exposes module-specific public facades, while the physical implementation remains centralized in `internal.rs`. This is acceptable for Phase 6 because GUI code should depend on `anahtar-app`; a deeper internal physical split can be performed later if core churn increases.
