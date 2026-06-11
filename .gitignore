@@ -36,3 +36,6 @@
 
 # Local-only working journals
 /journals/
+
+# Tauri generated schemas
+**/src-tauri/gen/
