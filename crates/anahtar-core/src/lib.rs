@@ -36,6 +36,8 @@ pub enum AnahtarError {
     EntryNotFound(String),
     #[error("entry selector matches multiple entries; use UUID: {0}")]
     DuplicateEntrySelector(String),
+    #[error("TOTP is not available for entry: {0}")]
+    TotpUnavailable(String),
     #[error("group not found: {0}")]
     GroupNotFound(String),
     #[error("invalid group path: {0}")]
@@ -111,6 +113,13 @@ pub struct CustomField {
     pub key: String,
     pub value: String,
     pub protected: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct TotpCode {
+    pub code: String,
+    pub valid_for_seconds: u64,
+    pub period_seconds: u64,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -253,15 +262,7 @@ pub fn search_entries(db: &Database, query: &str) -> Vec<EntrySummary> {
 }
 
 pub fn show_entry(db: &Database, selector: &str, reveal_password: bool) -> Result<EntryDetail> {
-    let summary = list_entries(db)
-        .into_iter()
-        .find(|e| {
-            e.id == selector
-                || e.title
-                    .as_deref()
-                    .is_some_and(|t| t.eq_ignore_ascii_case(selector))
-        })
-        .ok_or_else(|| AnahtarError::EntryNotFound(selector.to_string()))?;
+    let summary = resolve_entry_summary(db, selector)?;
     let entry = find_entry(db, &summary.id)
         .ok_or_else(|| AnahtarError::EntryNotFound(selector.to_string()))?;
     Ok(detail_from_entry(
@@ -269,6 +270,23 @@ pub fn show_entry(db: &Database, selector: &str, reveal_password: bool) -> Resul
         summary.group_path,
         reveal_password,
     ))
+}
+
+pub fn totp_code(db: &Database, selector: &str) -> Result<TotpCode> {
+    let summary = resolve_entry_summary(db, selector)?;
+    let entry = find_entry(db, &summary.id)
+        .ok_or_else(|| AnahtarError::EntryNotFound(selector.to_string()))?;
+    let otp = entry
+        .get_otp()
+        .map_err(|_| AnahtarError::TotpUnavailable(selector.to_string()))?;
+    let code = otp
+        .value_now()
+        .map_err(|_| AnahtarError::TotpUnavailable(selector.to_string()))?;
+    Ok(TotpCode {
+        code: code.code,
+        valid_for_seconds: code.valid_for.as_secs(),
+        period_seconds: code.period.as_secs(),
+    })
 }
 
 pub fn upgrade_to_kdbx41(
@@ -608,6 +626,18 @@ fn ensure_input_output_distinct(input: &Path, output: &Path) -> Result<()> {
     Ok(())
 }
 
+fn resolve_entry_summary(db: &Database, selector: &str) -> Result<EntrySummary> {
+    list_entries(db)
+        .into_iter()
+        .find(|e| {
+            e.id == selector
+                || e.title
+                    .as_deref()
+                    .is_some_and(|t| t.eq_ignore_ascii_case(selector))
+        })
+        .ok_or_else(|| AnahtarError::EntryNotFound(selector.to_string()))
+}
+
 fn resolve_unique_entry_id(db: &Database, selector: &str) -> Result<keepass::db::EntryId> {
     if let Ok(uuid) = Uuid::parse_str(selector) {
         let entry_id = keepass::db::EntryId::from_uuid(uuid);
@@ -761,6 +791,23 @@ fn entry_notes_by_id(db: &Database, id: &str) -> Option<String> {
 mod tests {
     use super::*;
     use keepass::db::Value;
+
+    #[test]
+    fn totp_code_does_not_expose_uri() {
+        let mut db = Database::new();
+        db.root_mut().add_entry().edit(|e| {
+            e.set_unprotected(fields::TITLE, "TOTP Example");
+            e.set_protected(
+                fields::OTP,
+                "otpauth://totp/KeePassXC:none?secret=JBSWY3DPEHPK3PXP&period=30&digits=6&issuer=KeePassXC",
+            );
+        });
+
+        let code = totp_code(&db, "TOTP Example").unwrap();
+        assert_eq!(code.code.len(), 6);
+        assert!(code.code.chars().all(|c| c.is_ascii_digit()));
+        assert_eq!(code.period_seconds, 30);
+    }
 
     #[test]
     fn protected_fields_are_hidden_unless_revealed() {

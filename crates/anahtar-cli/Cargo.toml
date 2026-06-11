@@ -13,5 +13,13 @@ anahtar-core = { path = "../anahtar-core" }
 anyhow.workspace = true
 clap.workspace = true
 rpassword.workspace = true
+serde.workspace = true
 serde_json.workspace = true
 uuid.workspace = true
+toml.workspace = true
+directories.workspace = true
+arboard.workspace = true
+rand.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
