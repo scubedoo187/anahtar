@@ -1,7 +1,7 @@
 use anahtar_app::{AnahtarService, WriteMode};
 use anahtar_core::{
-    AddEntryRequest, EditEntryRequest, EntryDetail, EntrySelector, EntrySummary, TotpCode,
-    VaultCredentials, VaultInfo, WriteReport,
+    AddEntryRequest, AuditReport, EditEntryRequest, EntryDetail, EntrySelector, EntrySummary,
+    GroupSummary, TotpCode, VaultCredentials, VaultInfo, WriteReport,
 };
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -96,6 +96,26 @@ fn totp_code(
     let credentials = credentials_from_gui(password, key_file);
     let selector = selector_from_gui(&selector_kind, selector_value)?;
     AnahtarService::totp(path, &credentials, &selector).map_err(safe_error)
+}
+
+#[tauri::command]
+fn list_groups(
+    path: String,
+    password: String,
+    key_file: Option<String>,
+) -> GuiResult<Vec<GroupSummary>> {
+    let credentials = credentials_from_gui(password, key_file);
+    AnahtarService::groups(path, &credentials).map_err(safe_error)
+}
+
+#[tauri::command]
+fn audit_vault(
+    path: String,
+    password: String,
+    key_file: Option<String>,
+) -> GuiResult<AuditReport> {
+    let credentials = credentials_from_gui(password, key_file);
+    AnahtarService::audit(path, &credentials).map_err(safe_error)
 }
 
 #[tauri::command]
@@ -221,6 +241,8 @@ pub fn run() {
             search_entries,
             show_entry,
             totp_code,
+            list_groups,
+            audit_vault,
             add_entry,
             edit_entry,
             delete_entry
@@ -260,7 +282,7 @@ mod tests {
         assert_eq!(search.len(), 1);
 
         let detail = show_entry(
-            path,
+            path.clone(),
             "testpass".to_string(),
             None,
             "title".to_string(),
@@ -270,6 +292,13 @@ mod tests {
         .unwrap();
         assert_eq!(detail.title.as_deref(), Some("Github Test"));
         assert!(detail.password.is_none());
+
+        let groups = list_groups(path.clone(), "testpass".to_string(), None).unwrap();
+        assert!(groups.iter().any(|group| group.path == "Root/General/Web"));
+
+        let audit = audit_vault(path, "testpass".to_string(), None).unwrap();
+        let audit_json = serde_json::to_string(&audit).unwrap();
+        assert!(!audit_json.contains("github-pass"));
     }
 
     #[test]

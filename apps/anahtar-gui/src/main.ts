@@ -1,18 +1,22 @@
 import {
   addEntry,
+  auditVault,
   backendStatus,
   deleteEntry,
   editEntry,
   inspectVault,
+  listGroups,
   searchEntries,
   showEntry,
   totpCode,
   unlockVault,
   versionLabel,
   type AddEntryRequest,
+  type AuditReport,
   type EditEntryRequest,
   type EntryDetail,
   type EntrySummary,
+  type GroupSummary,
   type VaultRequest,
   type WriteReport,
 } from "./api";
@@ -108,6 +112,22 @@ app.innerHTML = `
       </section>
     </section>
 
+    <section class="workspace-grid">
+      <section class="card">
+        <h2>Groups</h2>
+        <p class="hint">Group list comes from anahtar-app and contains no secret values.</p>
+        <button id="load-groups" type="button" disabled>Load groups</button>
+        <div id="group-list" class="entry-list compact-list" aria-live="polite">Unlock first to inspect groups.</div>
+      </section>
+
+      <section class="card">
+        <h2>Audit</h2>
+        <p class="hint">Audit findings are designed to be actionable without printing secret values.</p>
+        <button id="run-audit" type="button" disabled>Run audit</button>
+        <div id="audit-findings" class="detail-output" aria-live="polite">Unlock first to run audit.</div>
+      </section>
+    </section>
+
     <section class="card command-surface">
       <h2>Write actions</h2>
       <p class="hint">Alpha write actions update the unlocked vault in place through anahtar-app and display the backup path. Test on generated-vault copies only.</p>
@@ -166,6 +186,8 @@ bindButton("#copy-username", copySelectedUsername);
 bindButton("#copy-password", copySelectedPassword);
 bindButton("#copy-url", copySelectedUrl);
 bindButton("#copy-totp", copySelectedTotp);
+bindButton("#load-groups", runLoadGroups);
+bindButton("#run-audit", runAudit);
 bindForm("#add-entry-form", runAddEntry);
 bindForm("#edit-entry-form", runEditEntry);
 bindButton("#delete-entry", runDeleteEntry);
@@ -239,6 +261,8 @@ function lockVault(): Promise<void> {
   renderSessionState();
   renderEntryList([]);
   renderEmptyDetail("Select an entry to view details.");
+  renderGroups([]);
+  renderAudit(null);
   clipboardStatus("Clipboard idle.", "neutral");
   writeReportEl().textContent = "No write action run yet.";
   outputEl().textContent = "Locked. In-memory session cleared.";
@@ -331,6 +355,22 @@ async function loadSelectedDetail(revealPassword: boolean): Promise<void> {
   } catch (error) {
     detailEl.textContent = `Error: ${errorMessage(error)}`;
   }
+}
+
+async function runLoadGroups(): Promise<void> {
+  await renderCommand(async () => {
+    const groups = await listGroups(requireSession());
+    renderGroups(groups);
+    return `Loaded ${groups.length} groups.`;
+  });
+}
+
+async function runAudit(): Promise<void> {
+  await renderCommand(async () => {
+    const report = await auditVault(requireSession());
+    renderAudit(report);
+    return `Audit found ${report.findings.length} findings.`;
+  });
 }
 
 async function runAddEntry(): Promise<void> {
@@ -429,6 +469,64 @@ function renderWriteReport(report: WriteReport): string {
     `Backup: ${report.backup_path ?? ""}`,
     `Final target: ${report.final_target_path ?? ""}`,
   ].join("\n");
+}
+
+function renderGroups(groups: GroupSummary[]): void {
+  const list = groupListEl();
+  list.textContent = "";
+
+  if (!activeSession) {
+    list.textContent = "Unlock first to inspect groups.";
+    return;
+  }
+
+  if (groups.length === 0) {
+    list.textContent = "No groups loaded.";
+    return;
+  }
+
+  for (const group of groups) {
+    const item = document.createElement("div");
+    item.className = "group-row";
+    const title = document.createElement("strong");
+    title.textContent = group.path;
+    const meta = document.createElement("span");
+    meta.textContent = `${group.entry_count} entries · ${group.child_group_count} child groups`;
+    item.append(title, meta);
+    list.append(item);
+  }
+}
+
+function renderAudit(report: AuditReport | null): void {
+  const list = auditFindingsEl();
+  list.textContent = "";
+
+  if (!activeSession) {
+    list.textContent = "Unlock first to run audit.";
+    return;
+  }
+
+  if (!report) {
+    list.textContent = "No audit run yet.";
+    return;
+  }
+
+  if (report.findings.length === 0) {
+    list.textContent = "No audit findings.";
+    return;
+  }
+
+  for (const finding of report.findings) {
+    const item = document.createElement("div");
+    item.className = "audit-row";
+    item.append(
+      detailLine("Kind", finding.kind),
+      detailLine("Entry", finding.title ?? finding.entry_id),
+      detailLine("Group", finding.group_path),
+      detailLine("Message", finding.message),
+    );
+    list.append(item);
+  }
 }
 
 function renderEntryList(entries: EntrySummary[]): void {
@@ -589,6 +687,8 @@ function renderSessionState(): void {
   setDisabled("#copy-password", !unlocked || !selectedEntryId);
   setDisabled("#copy-url", !unlocked || !selectedDetail?.url);
   setDisabled("#copy-totp", !unlocked || !selectedEntryId);
+  setDisabled("#load-groups", !unlocked);
+  setDisabled("#run-audit", !unlocked);
   setDisabled("#backup-dir", !unlocked);
   setDisabled("#add-group", !unlocked);
   setDisabled("#add-title", !unlocked);
@@ -686,6 +786,22 @@ function entryListEl(): HTMLDivElement {
   const list = document.querySelector<HTMLDivElement>("#entry-list");
   if (!list) {
     throw new Error("entry list element missing");
+  }
+  return list;
+}
+
+function groupListEl(): HTMLDivElement {
+  const list = document.querySelector<HTMLDivElement>("#group-list");
+  if (!list) {
+    throw new Error("group list element missing");
+  }
+  return list;
+}
+
+function auditFindingsEl(): HTMLDivElement {
+  const list = document.querySelector<HTMLDivElement>("#audit-findings");
+  if (!list) {
+    throw new Error("audit findings element missing");
   }
   return list;
 }

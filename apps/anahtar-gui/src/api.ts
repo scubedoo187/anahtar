@@ -36,6 +36,26 @@ export type EntryDetail = EntrySummary & {
   custom_fields: CustomField[];
 };
 
+export type GroupSummary = {
+  id: string;
+  path: string;
+  name: string;
+  entry_count: number;
+  child_group_count: number;
+};
+
+export type AuditFinding = {
+  kind: string;
+  entry_id: string;
+  title?: string | null;
+  group_path: string;
+  message: string;
+};
+
+export type AuditReport = {
+  findings: AuditFinding[];
+};
+
 export type TotpCode = {
   code: string;
   valid_for_seconds: number;
@@ -149,6 +169,22 @@ export function totpCode(
     keyFile: emptyToNull(request.keyFile),
     selectorKind,
     selectorValue,
+  });
+}
+
+export function listGroups(request: VaultRequest): Promise<GroupSummary[]> {
+  return invoke<GroupSummary[]>("list_groups", {
+    path: request.path,
+    password: request.password,
+    keyFile: emptyToNull(request.keyFile),
+  });
+}
+
+export function auditVault(request: VaultRequest): Promise<AuditReport> {
+  return invoke<AuditReport>("audit_vault", {
+    path: request.path,
+    password: request.password,
+    keyFile: emptyToNull(request.keyFile),
   });
 }
 

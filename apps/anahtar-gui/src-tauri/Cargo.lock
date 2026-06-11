@@ -67,6 +67,7 @@ dependencies = [
  "anahtar-app",
  "anahtar-core",
  "serde",
+ "serde_json",
  "tauri",
  "tauri-build",
  "tempfile",
