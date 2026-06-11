@@ -36,6 +36,12 @@ export type EntryDetail = EntrySummary & {
   custom_fields: CustomField[];
 };
 
+export type TotpCode = {
+  code: string;
+  valid_for_seconds: number;
+  period_seconds: number;
+};
+
 export type SelectorKind = "id" | "title" | "url" | "username" | "auto";
 
 export type VaultRequest = {
@@ -85,6 +91,20 @@ export function showEntry(
     selectorKind,
     selectorValue,
     revealPassword,
+  });
+}
+
+export function totpCode(
+  request: VaultRequest,
+  selectorKind: SelectorKind,
+  selectorValue: string,
+): Promise<TotpCode> {
+  return invoke<TotpCode>("totp_code", {
+    path: request.path,
+    password: request.password,
+    keyFile: emptyToNull(request.keyFile),
+    selectorKind,
+    selectorValue,
   });
 }
 

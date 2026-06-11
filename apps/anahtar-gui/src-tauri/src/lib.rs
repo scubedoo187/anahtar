@@ -1,5 +1,5 @@
 use anahtar_app::AnahtarService;
-use anahtar_core::{EntryDetail, EntrySelector, EntrySummary, VaultCredentials, VaultInfo};
+use anahtar_core::{EntryDetail, EntrySelector, EntrySummary, TotpCode, VaultCredentials, VaultInfo};
 use serde::Serialize;
 use std::path::PathBuf;
 
@@ -61,6 +61,19 @@ fn show_entry(
     AnahtarService::show(path, &credentials, &selector, reveal_password).map_err(safe_error)
 }
 
+#[tauri::command]
+fn totp_code(
+    path: String,
+    password: String,
+    key_file: Option<String>,
+    selector_kind: String,
+    selector_value: String,
+) -> GuiResult<TotpCode> {
+    let credentials = credentials_from_gui(password, key_file);
+    let selector = selector_from_gui(&selector_kind, selector_value)?;
+    AnahtarService::totp(path, &credentials, &selector).map_err(safe_error)
+}
+
 fn credentials_from_gui(password: String, key_file: Option<String>) -> VaultCredentials {
     VaultCredentials {
         password,
@@ -97,7 +110,8 @@ pub fn run() {
             inspect_vault,
             unlock_vault,
             search_entries,
-            show_entry
+            show_entry,
+            totp_code
         ])
         .run(tauri::generate_context!())
         .expect("failed to run Anahtar GUI");

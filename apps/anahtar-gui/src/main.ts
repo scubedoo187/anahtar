@@ -3,6 +3,7 @@ import {
   inspectVault,
   searchEntries,
   showEntry,
+  totpCode,
   unlockVault,
   versionLabel,
   type EntryDetail,
@@ -23,6 +24,7 @@ let activeEntries: EntrySummary[] = [];
 let selectedEntryId: string | null = null;
 let selectedDetail: EntryDetail | null = null;
 let detailRevealed = false;
+let clipboardClearTimer: number | null = null;
 
 app.innerHTML = `
   <section class="shell">
@@ -89,6 +91,13 @@ app.innerHTML = `
           <button id="reload-detail" type="button" disabled>Reload safe detail</button>
           <button id="reveal-detail" type="button" disabled>Reveal sensitive fields</button>
         </div>
+        <div class="button-row">
+          <button id="copy-username" type="button" disabled>Copy username</button>
+          <button id="copy-password" type="button" disabled>Copy password</button>
+          <button id="copy-url" type="button" disabled>Copy URL</button>
+          <button id="copy-totp" type="button" disabled>Copy TOTP</button>
+        </div>
+        <div id="clipboard-status" class="status neutral">Clipboard idle.</div>
         <div id="entry-detail" class="detail-output" aria-live="polite">Select an entry to view details.</div>
       </section>
     </section>
@@ -106,6 +115,10 @@ bindButton("#search-entries", runSearch);
 bindButton("#reset-list", resetList);
 bindButton("#reload-detail", reloadSafeDetail);
 bindButton("#reveal-detail", revealSelectedDetail);
+bindButton("#copy-username", copySelectedUsername);
+bindButton("#copy-password", copySelectedPassword);
+bindButton("#copy-url", copySelectedUrl);
+bindButton("#copy-totp", copySelectedTotp);
 
 async function refreshBackendStatus(): Promise<void> {
   const statusEl = document.querySelector<HTMLParagraphElement>("#backend-status");
@@ -156,10 +169,12 @@ function lockVault(): Promise<void> {
   selectedEntryId = null;
   selectedDetail = null;
   detailRevealed = false;
+  clearClipboardTimer();
   clearPasswordInput();
   renderSessionState();
   renderEntryList([]);
   renderEmptyDetail("Select an entry to view details.");
+  clipboardStatus("Clipboard idle.", "neutral");
   outputEl().textContent = "Locked. In-memory session cleared.";
   return Promise.resolve();
 }
@@ -203,6 +218,34 @@ async function reloadSafeDetail(): Promise<void> {
 
 async function revealSelectedDetail(): Promise<void> {
   await loadSelectedDetail(true);
+}
+
+async function copySelectedUsername(): Promise<void> {
+  const detail = requireSelectedDetail();
+  await copyWithOwnedClear(detail.username ?? "", "username");
+}
+
+async function copySelectedUrl(): Promise<void> {
+  const detail = requireSelectedDetail();
+  await copyWithOwnedClear(detail.url ?? "", "URL");
+}
+
+async function copySelectedPassword(): Promise<void> {
+  const session = requireSession();
+  if (!selectedEntryId) {
+    throw new Error("select an entry first");
+  }
+  const detail = await showEntry(session, "id", selectedEntryId, true);
+  await copyWithOwnedClear(detail.password ?? "", "password");
+}
+
+async function copySelectedTotp(): Promise<void> {
+  const session = requireSession();
+  if (!selectedEntryId) {
+    throw new Error("select an entry first");
+  }
+  const code = await totpCode(session, "id", selectedEntryId);
+  await copyWithOwnedClear(code.code, `TOTP code valid for ${code.valid_for_seconds}s`);
 }
 
 async function loadSelectedDetail(revealPassword: boolean): Promise<void> {
@@ -267,6 +310,46 @@ function renderEntryList(entries: EntrySummary[]): void {
 
     button.append(title, meta, id);
     list.append(button);
+  }
+}
+
+async function copyWithOwnedClear(value: string, label: string): Promise<void> {
+  if (!value) {
+    clipboardStatus(`${label} is empty or unavailable.`, "locked");
+    return;
+  }
+  if (!navigator.clipboard) {
+    clipboardStatus("Clipboard API is unavailable in this environment.", "locked");
+    return;
+  }
+
+  await navigator.clipboard.writeText(value);
+  clipboardStatus(`Copied ${label}. Clipboard will clear in 30 seconds if unchanged.`, "unlocked");
+  clearClipboardTimer();
+  clipboardClearTimer = window.setTimeout(() => {
+    void clearClipboardIfOwned(value);
+  }, 30_000);
+}
+
+async function clearClipboardIfOwned(value: string): Promise<void> {
+  try {
+    if ((await navigator.clipboard.readText()) === value) {
+      await navigator.clipboard.writeText("");
+      clipboardStatus("Clipboard cleared.", "neutral");
+    } else {
+      clipboardStatus("Clipboard changed externally; Anahtar left it untouched.", "neutral");
+    }
+  } catch (error) {
+    clipboardStatus(`Clipboard clear skipped: ${errorMessage(error)}`, "locked");
+  } finally {
+    clipboardClearTimer = null;
+  }
+}
+
+function clearClipboardTimer(): void {
+  if (clipboardClearTimer !== null) {
+    window.clearTimeout(clipboardClearTimer);
+    clipboardClearTimer = null;
   }
 }
 
@@ -348,6 +431,10 @@ function renderSessionState(): void {
   setDisabled("#reset-list", !unlocked);
   setDisabled("#reload-detail", !unlocked || !selectedEntryId);
   setDisabled("#reveal-detail", !unlocked || !selectedEntryId || detailRevealed);
+  setDisabled("#copy-username", !unlocked || !selectedDetail?.username);
+  setDisabled("#copy-password", !unlocked || !selectedEntryId);
+  setDisabled("#copy-url", !unlocked || !selectedDetail?.url);
+  setDisabled("#copy-totp", !unlocked || !selectedEntryId);
 
   const status = document.querySelector<HTMLDivElement>("#session-status");
   if (!status) return;
@@ -358,6 +445,20 @@ function renderSessionState(): void {
     status.className = "status locked";
     status.textContent = "Locked";
   }
+}
+
+function requireSelectedDetail(): EntryDetail {
+  if (!selectedDetail) {
+    throw new Error("select an entry first");
+  }
+  return selectedDetail;
+}
+
+function clipboardStatus(message: string, state: "locked" | "neutral" | "unlocked"): void {
+  const status = document.querySelector<HTMLDivElement>("#clipboard-status");
+  if (!status) return;
+  status.className = `status ${state}`;
+  status.textContent = message;
 }
 
 function clearPasswordInput(): void {
@@ -411,7 +512,9 @@ function setDisabled(selector: string, disabled: boolean): void {
 
 function bindButton(selector: string, handler: () => Promise<void>): void {
   document.querySelector<HTMLButtonElement>(selector)?.addEventListener("click", () => {
-    void handler();
+    void handler().catch((error: unknown) => {
+      clipboardStatus(errorMessage(error), "locked");
+    });
   });
 }
 
