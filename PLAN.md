@@ -188,17 +188,42 @@ The active implementation phase is Phase 1. The canonical detailed plan is `docs
 - [x] No secrets appear in logs or normal command output.
 - [x] Config/default vault, `--vault` override, generate, copy, and TOTP workflows were manually verified.
 
-### Phase 5 — GUI alpha planning
+### Phase 5 — CLI Password Manager Productization
 
-- [ ] Choose Tauri frontend stack after CLI core stabilizes.
-- [ ] Reuse `anahtar-core` APIs from GUI commands.
-- [ ] Implement open/unlock/search/list/detail/copy first.
-- [ ] Add edit/save-as only after CLI write path is stable.
+Canonical plan: `docs/phase-plans/phase-5-cli-password-manager-productization.md`
+
+- [ ] Add credential material abstraction and key-file support if supported by backend.
+- [ ] Add safe in-place write workflow as the default write path, with backup and verification.
+- [ ] Add stable explicit selector model.
+- [ ] Add group organization including list/add/rename/delete and entry move support.
+- [ ] Add audit/check commands that never print secrets.
+- [ ] Add CI/install/release polish, including shell completion.
+- [ ] Add product threat model and safety docs.
 
 #### Phase 5 exit criteria
 
+- Anahtar can be used as a credible password-manager CLI product.
+- Password-only and password + key-file workflows are supported if backend support is available.
+- Configured vault is safely updated in place by default with backup, temp save, atomic replacement, and reopen verification.
+- Save-as write flows remain available.
+- Selectors are explicit, duplicate-safe, and scriptable.
+- Group organization is supported, including rename/delete.
+- Audit/check commands produce actionable non-secret output.
+- CI verifies fmt, clippy, and tests.
+
+### Phase 6 — GUI alpha planning
+
+Canonical plan: `docs/phase-plans/phase-6-gui-alpha.md`
+
+- [ ] Choose/finalize Tauri frontend stack after CLI productization.
+- [ ] Reuse `anahtar-core` APIs from GUI commands.
+- [ ] Implement open/unlock/search/list/detail/copy first.
+- [ ] Add edit/write actions using the Phase 5 safe write model.
+
+#### Phase 6 exit criteria
+
 - GUI can open/unlock/search/list/detail/copy using `anahtar-core`.
-- GUI write actions are either disabled or use the same save-as safety model as CLI.
+- GUI write actions use the same safety model as CLI.
 - The GUI can be packaged locally for macOS first, with Windows/Linux left as follow-up packaging work.
 
 ## Record 3 — Final goal reference
