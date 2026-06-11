@@ -6,7 +6,13 @@ use anahtar_core::{
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
-type GuiResult<T> = Result<T, String>;
+type GuiResult<T> = Result<T, GuiError>;
+
+#[derive(Debug, Serialize, PartialEq, Eq)]
+struct GuiError {
+    kind: &'static str,
+    message: String,
+}
 
 #[derive(Debug, Serialize)]
 struct BackendStatus {
@@ -47,7 +53,7 @@ fn backend_status() -> BackendStatus {
 
 #[tauri::command]
 fn inspect_vault(path: String) -> GuiResult<VaultInfo> {
-    AnahtarService::inspect(path).map_err(safe_error)
+    AnahtarService::inspect(path).map_err(|error| gui_error("inspect_failed", error))
 }
 
 #[tauri::command]
@@ -57,7 +63,7 @@ fn unlock_vault(
     key_file: Option<String>,
 ) -> GuiResult<Vec<EntrySummary>> {
     let credentials = credentials_from_gui(password, key_file);
-    AnahtarService::list(path, &credentials).map_err(safe_error)
+    AnahtarService::list(path, &credentials).map_err(|error| gui_error("unlock_failed", error))
 }
 
 #[tauri::command]
@@ -68,7 +74,8 @@ fn search_entries(
     query: String,
 ) -> GuiResult<Vec<EntrySummary>> {
     let credentials = credentials_from_gui(password, key_file);
-    AnahtarService::search(path, &credentials, &query).map_err(safe_error)
+    AnahtarService::search(path, &credentials, &query)
+        .map_err(|error| gui_error("read_failed", error))
 }
 
 #[tauri::command]
@@ -82,7 +89,8 @@ fn show_entry(
 ) -> GuiResult<EntryDetail> {
     let credentials = credentials_from_gui(password, key_file);
     let selector = selector_from_gui(&selector_kind, selector_value)?;
-    AnahtarService::show(path, &credentials, &selector, reveal_password).map_err(safe_error)
+    AnahtarService::show(path, &credentials, &selector, reveal_password)
+        .map_err(|error| gui_error("read_failed", error))
 }
 
 #[tauri::command]
@@ -95,7 +103,8 @@ fn totp_code(
 ) -> GuiResult<TotpCode> {
     let credentials = credentials_from_gui(password, key_file);
     let selector = selector_from_gui(&selector_kind, selector_value)?;
-    AnahtarService::totp(path, &credentials, &selector).map_err(safe_error)
+    AnahtarService::totp(path, &credentials, &selector)
+        .map_err(|error| gui_error("totp_failed", error))
 }
 
 #[tauri::command]
@@ -105,13 +114,13 @@ fn list_groups(
     key_file: Option<String>,
 ) -> GuiResult<Vec<GroupSummary>> {
     let credentials = credentials_from_gui(password, key_file);
-    AnahtarService::groups(path, &credentials).map_err(safe_error)
+    AnahtarService::groups(path, &credentials).map_err(|error| gui_error("group_failed", error))
 }
 
 #[tauri::command]
 fn audit_vault(path: String, password: String, key_file: Option<String>) -> GuiResult<AuditReport> {
     let credentials = credentials_from_gui(password, key_file);
-    AnahtarService::audit(path, &credentials).map_err(safe_error)
+    AnahtarService::audit(path, &credentials).map_err(|error| gui_error("audit_failed", error))
 }
 
 #[tauri::command]
@@ -136,8 +145,13 @@ fn add_entry(
         },
         WriteMode::InPlace { backup_dir },
     )
-    .map_err(safe_error)?
-    .ok_or_else(|| "add entry dry-run returned no write report".to_string())
+    .map_err(|error| gui_error("write_failed", error))?
+    .ok_or_else(|| {
+        gui_error(
+            "internal_failed",
+            "add entry dry-run returned no write report",
+        )
+    })
 }
 
 #[tauri::command]
@@ -163,8 +177,13 @@ fn edit_entry(
         },
         WriteMode::InPlace { backup_dir },
     )
-    .map_err(safe_error)?
-    .ok_or_else(|| "edit entry dry-run returned no write report".to_string())
+    .map_err(|error| gui_error("write_failed", error))?
+    .ok_or_else(|| {
+        gui_error(
+            "internal_failed",
+            "edit entry dry-run returned no write report",
+        )
+    })
 }
 
 #[tauri::command]
@@ -184,8 +203,13 @@ fn delete_entry(
             backup_dir: optional_path(backup_dir),
         },
     )
-    .map_err(safe_error)?
-    .ok_or_else(|| "delete entry dry-run returned no write report".to_string())
+    .map_err(|error| gui_error("write_failed", error))?
+    .ok_or_else(|| {
+        gui_error(
+            "internal_failed",
+            "delete entry dry-run returned no write report",
+        )
+    })
 }
 
 fn credentials_from_gui(password: String, key_file: Option<String>) -> VaultCredentials {
@@ -199,7 +223,10 @@ fn credentials_from_gui(password: String, key_file: Option<String>) -> VaultCred
 
 fn selector_from_gui(kind: &str, value: String) -> GuiResult<EntrySelector> {
     if value.trim().is_empty() {
-        return Err("entry selector value is required".to_string());
+        return Err(gui_error(
+            "validation_failed",
+            "entry selector value is required",
+        ));
     }
 
     match kind {
@@ -208,7 +235,10 @@ fn selector_from_gui(kind: &str, value: String) -> GuiResult<EntrySelector> {
         "url" => Ok(EntrySelector::Url(value)),
         "username" => Ok(EntrySelector::Username(value)),
         "auto" => Ok(EntrySelector::Auto(value)),
-        _ => Err("unknown entry selector kind".to_string()),
+        _ => Err(gui_error(
+            "validation_failed",
+            "unknown entry selector kind",
+        )),
     }
 }
 
@@ -227,8 +257,11 @@ fn empty_secret_to_none(value: Option<String>) -> Option<String> {
     value.and_then(|value| (!value.is_empty()).then_some(value))
 }
 
-fn safe_error(error: impl std::fmt::Display) -> String {
-    error.to_string()
+fn gui_error(kind: &'static str, error: impl std::fmt::Display) -> GuiError {
+    GuiError {
+        kind,
+        message: error.to_string(),
+    }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -311,6 +344,13 @@ mod tests {
     }
 
     #[test]
+    fn invalid_selector_returns_validation_error() {
+        let err = selector_from_gui("unknown", "value".to_string()).unwrap_err();
+        assert_eq!(err.kind, "validation_failed");
+        assert_eq!(err.message, "unknown entry selector kind");
+    }
+
+    #[test]
     fn wrong_password_returns_safe_error() {
         let path = generated_vault_path();
         if !std::path::Path::new(&path).exists() {
@@ -318,8 +358,9 @@ mod tests {
         }
 
         let err = unlock_vault(path, "wrong-password".to_string(), None).unwrap_err();
-        assert!(err.contains("failed to open database"));
-        assert!(!err.contains("wrong-password"));
+        assert_eq!(err.kind, "unlock_failed");
+        assert!(err.message.contains("failed to open database"));
+        assert!(!err.message.contains("wrong-password"));
     }
 
     #[test]

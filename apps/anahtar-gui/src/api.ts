@@ -1,5 +1,10 @@
 import { invoke } from "@tauri-apps/api/core";
 
+export type AnahtarGuiError = {
+  kind: string;
+  message: string;
+};
+
 export type BackendStatus = {
   app: string;
   version: string;
