@@ -8,6 +8,10 @@
 /target/
 **/target/
 
+# Frontend build outputs and dependencies
+**/node_modules/
+**/dist/
+
 # Local/private KeePass vaults and generated vault outputs
 /assets/
 *.kdbx
