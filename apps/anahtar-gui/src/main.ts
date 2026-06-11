@@ -1,14 +1,20 @@
 import {
+  addEntry,
   backendStatus,
+  deleteEntry,
+  editEntry,
   inspectVault,
   searchEntries,
   showEntry,
   totpCode,
   unlockVault,
   versionLabel,
+  type AddEntryRequest,
+  type EditEntryRequest,
   type EntryDetail,
   type EntrySummary,
   type VaultRequest,
+  type WriteReport,
 } from "./api";
 import "./styles.css";
 
@@ -101,6 +107,47 @@ app.innerHTML = `
         <div id="entry-detail" class="detail-output" aria-live="polite">Select an entry to view details.</div>
       </section>
     </section>
+
+    <section class="card command-surface">
+      <h2>Write actions</h2>
+      <p class="hint">Alpha write actions update the unlocked vault in place through anahtar-app and display the backup path. Test on generated-vault copies only.</p>
+
+      <label>
+        Backup directory <span class="muted">optional</span>
+        <input id="backup-dir" type="text" spellcheck="false" placeholder="defaults to sibling anahtar-backups/" disabled />
+      </label>
+
+      <div class="write-grid">
+        <form id="add-entry-form" class="write-form">
+          <h3>Add entry</h3>
+          <label>Group path <input id="add-group" type="text" value="General/Web" disabled /></label>
+          <label>Title <input id="add-title" type="text" value="GUI Added Entry" disabled /></label>
+          <label>Username <input id="add-username" type="text" value="gui-user" disabled /></label>
+          <label>Password <input id="add-password" type="password" autocomplete="new-password" disabled /></label>
+          <label>URL <input id="add-url" type="url" value="https://gui.example.com" disabled /></label>
+          <label>Notes <input id="add-notes" type="text" value="Added from Anahtar GUI alpha" disabled /></label>
+          <button id="add-entry" type="submit" disabled>Add entry</button>
+        </form>
+
+        <form id="edit-entry-form" class="write-form">
+          <h3>Edit selected entry</h3>
+          <label>Title <input id="edit-title" type="text" placeholder="leave blank to keep" disabled /></label>
+          <label>Username <input id="edit-username" type="text" placeholder="leave blank to keep" disabled /></label>
+          <label>Password <input id="edit-password" type="password" autocomplete="new-password" placeholder="leave blank to keep" disabled /></label>
+          <label>URL <input id="edit-url" type="url" placeholder="leave blank to keep" disabled /></label>
+          <label>Notes <input id="edit-notes" type="text" placeholder="leave blank to keep" disabled /></label>
+          <button id="edit-entry" type="submit" disabled>Edit selected</button>
+        </form>
+      </div>
+
+      <div class="danger-zone">
+        <h3>Delete selected entry</h3>
+        <p class="hint">Requires confirmation. A backup is created before the vault is replaced.</p>
+        <button id="delete-entry" type="button" disabled>Delete selected entry</button>
+      </div>
+
+      <div id="write-report" class="output compact" aria-live="polite">No write action run yet.</div>
+    </section>
   </section>
 `;
 
@@ -119,6 +166,9 @@ bindButton("#copy-username", copySelectedUsername);
 bindButton("#copy-password", copySelectedPassword);
 bindButton("#copy-url", copySelectedUrl);
 bindButton("#copy-totp", copySelectedTotp);
+bindForm("#add-entry-form", runAddEntry);
+bindForm("#edit-entry-form", runEditEntry);
+bindButton("#delete-entry", runDeleteEntry);
 
 async function refreshBackendStatus(): Promise<void> {
   const statusEl = document.querySelector<HTMLParagraphElement>("#backend-status");
@@ -163,6 +213,21 @@ async function runUnlock(): Promise<void> {
   });
 }
 
+async function refreshEntriesAfterWrite(changedEntryId?: string | null): Promise<void> {
+  const session = requireSession();
+  activeEntries = await unlockVault(session);
+  selectedEntryId = changedEntryId ?? null;
+  selectedDetail = null;
+  detailRevealed = false;
+  renderEntryList(activeEntries);
+  if (selectedEntryId) {
+    await loadSelectedDetail(false);
+  } else {
+    renderEmptyDetail("Select an entry to view details.");
+  }
+  renderSessionState();
+}
+
 function lockVault(): Promise<void> {
   activeSession = null;
   activeEntries = [];
@@ -175,6 +240,7 @@ function lockVault(): Promise<void> {
   renderEntryList([]);
   renderEmptyDetail("Select an entry to view details.");
   clipboardStatus("Clipboard idle.", "neutral");
+  writeReportEl().textContent = "No write action run yet.";
   outputEl().textContent = "Locked. In-memory session cleared.";
   return Promise.resolve();
 }
@@ -267,6 +333,71 @@ async function loadSelectedDetail(revealPassword: boolean): Promise<void> {
   }
 }
 
+async function runAddEntry(): Promise<void> {
+  await renderWriteAction(async () => {
+    const session = requireSession();
+    const request: AddEntryRequest = {
+      group_path: inputValue("#add-group"),
+      title: inputValue("#add-title"),
+      username: inputValue("#add-username"),
+      password: inputValue("#add-password"),
+      url: inputValue("#add-url"),
+      notes: inputValue("#add-notes"),
+      backup_dir: inputValue("#backup-dir"),
+    };
+    if (!request.group_path.trim() || !request.title.trim()) {
+      throw new Error("group path and title are required");
+    }
+    const report = await addEntry(session, request);
+    clearWritePasswordInputs();
+    await refreshEntriesAfterWrite(report.changed_entry_id);
+    return renderWriteReport(report);
+  });
+}
+
+async function runEditEntry(): Promise<void> {
+  await renderWriteAction(async () => {
+    const session = requireSession();
+    if (!selectedEntryId) {
+      throw new Error("select an entry first");
+    }
+    const request: EditEntryRequest = {
+      title: inputValue("#edit-title"),
+      username: inputValue("#edit-username"),
+      password: inputValue("#edit-password"),
+      url: inputValue("#edit-url"),
+      notes: inputValue("#edit-notes"),
+      backup_dir: inputValue("#backup-dir"),
+    };
+    if (!hasEditChange(request)) {
+      throw new Error("provide at least one edit field");
+    }
+    const report = await editEntry(session, selectedEntryId, request);
+    clearEditInputs();
+    await refreshEntriesAfterWrite(report.changed_entry_id ?? selectedEntryId);
+    return renderWriteReport(report);
+  });
+}
+
+async function runDeleteEntry(): Promise<void> {
+  await renderWriteAction(async () => {
+    const session = requireSession();
+    if (!selectedEntryId) {
+      throw new Error("select an entry first");
+    }
+    const detailTitle = selectedDetail?.title ?? selectedEntryId;
+    const confirmed = window.confirm(
+      `Delete "${detailTitle}"? A backup will be created before the vault is replaced.`,
+    );
+    if (!confirmed) {
+      return "Delete cancelled.";
+    }
+    const report = await deleteEntry(session, selectedEntryId, inputValue("#backup-dir"));
+    await refreshEntriesAfterWrite(null);
+    return renderWriteReport(report);
+  });
+}
+
 async function renderCommand(action: () => Promise<string>): Promise<void> {
   const output = outputEl();
   output.textContent = "Running…";
@@ -275,6 +406,29 @@ async function renderCommand(action: () => Promise<string>): Promise<void> {
   } catch (error) {
     output.textContent = `Error: ${errorMessage(error)}`;
   }
+}
+
+async function renderWriteAction(action: () => Promise<string>): Promise<void> {
+  const output = writeReportEl();
+  output.textContent = "Running write action…";
+  try {
+    output.textContent = await action();
+  } catch (error) {
+    output.textContent = `Error: ${errorMessage(error)}`;
+  }
+}
+
+function renderWriteReport(report: WriteReport): string {
+  return [
+    `Operation: ${report.operation}`,
+    `Input: ${report.input_path}`,
+    `Output: ${report.output_path}`,
+    `Entries: ${report.input_entry_count} -> ${report.output_entry_count}`,
+    `Groups: ${report.input_group_count} -> ${report.output_group_count}`,
+    `Changed ID: ${report.changed_entry_id ?? ""}`,
+    `Backup: ${report.backup_path ?? ""}`,
+    `Final target: ${report.final_target_path ?? ""}`,
+  ].join("\n");
 }
 
 function renderEntryList(entries: EntrySummary[]): void {
@@ -435,6 +589,21 @@ function renderSessionState(): void {
   setDisabled("#copy-password", !unlocked || !selectedEntryId);
   setDisabled("#copy-url", !unlocked || !selectedDetail?.url);
   setDisabled("#copy-totp", !unlocked || !selectedEntryId);
+  setDisabled("#backup-dir", !unlocked);
+  setDisabled("#add-group", !unlocked);
+  setDisabled("#add-title", !unlocked);
+  setDisabled("#add-username", !unlocked);
+  setDisabled("#add-password", !unlocked);
+  setDisabled("#add-url", !unlocked);
+  setDisabled("#add-notes", !unlocked);
+  setDisabled("#add-entry", !unlocked);
+  setDisabled("#edit-title", !unlocked || !selectedEntryId);
+  setDisabled("#edit-username", !unlocked || !selectedEntryId);
+  setDisabled("#edit-password", !unlocked || !selectedEntryId);
+  setDisabled("#edit-url", !unlocked || !selectedEntryId);
+  setDisabled("#edit-notes", !unlocked || !selectedEntryId);
+  setDisabled("#edit-entry", !unlocked || !selectedEntryId);
+  setDisabled("#delete-entry", !unlocked || !selectedEntryId);
 
   const status = document.querySelector<HTMLDivElement>("#session-status");
   if (!status) return;
@@ -461,6 +630,26 @@ function clipboardStatus(message: string, state: "locked" | "neutral" | "unlocke
   status.textContent = message;
 }
 
+function hasEditChange(request: EditEntryRequest): boolean {
+  return [request.title, request.username, request.password, request.url, request.notes].some(
+    (value) => (value ?? "").trim().length > 0,
+  );
+}
+
+function clearEditInputs(): void {
+  for (const selector of ["#edit-title", "#edit-username", "#edit-password", "#edit-url", "#edit-notes"]) {
+    const input = document.querySelector<HTMLInputElement>(selector);
+    if (input) input.value = "";
+  }
+}
+
+function clearWritePasswordInputs(): void {
+  for (const selector of ["#add-password", "#edit-password"]) {
+    const input = document.querySelector<HTMLInputElement>(selector);
+    if (input) input.value = "";
+  }
+}
+
 function clearPasswordInput(): void {
   const input = document.querySelector<HTMLInputElement>("#master-password");
   if (input) {
@@ -475,6 +664,14 @@ function vaultPath(): string {
 function inputValue(selector: string): string {
   const input = document.querySelector<HTMLInputElement | HTMLSelectElement>(selector);
   return input?.value ?? "";
+}
+
+function writeReportEl(): HTMLDivElement {
+  const output = document.querySelector<HTMLDivElement>("#write-report");
+  if (!output) {
+    throw new Error("write report element missing");
+  }
+  return output;
 }
 
 function outputEl(): HTMLDivElement {
@@ -514,6 +711,15 @@ function bindButton(selector: string, handler: () => Promise<void>): void {
   document.querySelector<HTMLButtonElement>(selector)?.addEventListener("click", () => {
     void handler().catch((error: unknown) => {
       clipboardStatus(errorMessage(error), "locked");
+    });
+  });
+}
+
+function bindForm(selector: string, handler: () => Promise<void>): void {
+  document.querySelector<HTMLFormElement>(selector)?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    void handler().catch((error: unknown) => {
+      writeReportEl().textContent = `Error: ${errorMessage(error)}`;
     });
   });
 }

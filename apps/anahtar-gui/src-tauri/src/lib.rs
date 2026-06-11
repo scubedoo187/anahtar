@@ -1,6 +1,9 @@
-use anahtar_app::AnahtarService;
-use anahtar_core::{EntryDetail, EntrySelector, EntrySummary, TotpCode, VaultCredentials, VaultInfo};
-use serde::Serialize;
+use anahtar_app::{AnahtarService, WriteMode};
+use anahtar_core::{
+    AddEntryRequest, EditEntryRequest, EntryDetail, EntrySelector, EntrySummary, TotpCode,
+    VaultCredentials, VaultInfo, WriteReport,
+};
+use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 type GuiResult<T> = Result<T, String>;
@@ -10,6 +13,27 @@ struct BackendStatus {
     app: &'static str,
     version: &'static str,
     service: &'static str,
+}
+
+#[derive(Debug, Deserialize)]
+struct GuiAddEntryRequest {
+    group_path: String,
+    title: String,
+    username: Option<String>,
+    password: Option<String>,
+    url: Option<String>,
+    notes: Option<String>,
+    backup_dir: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct GuiEditEntryRequest {
+    title: Option<String>,
+    username: Option<String>,
+    password: Option<String>,
+    url: Option<String>,
+    notes: Option<String>,
+    backup_dir: Option<String>,
 }
 
 #[tauri::command]
@@ -74,6 +98,80 @@ fn totp_code(
     AnahtarService::totp(path, &credentials, &selector).map_err(safe_error)
 }
 
+#[tauri::command]
+fn add_entry(
+    path: String,
+    password: String,
+    key_file: Option<String>,
+    request: GuiAddEntryRequest,
+) -> GuiResult<WriteReport> {
+    let credentials = credentials_from_gui(password, key_file);
+    let backup_dir = optional_path(request.backup_dir);
+    AnahtarService::add_entry(
+        &path,
+        &credentials,
+        AddEntryRequest {
+            group_path: request.group_path,
+            title: request.title,
+            username: empty_to_none(request.username),
+            password: empty_to_none(request.password),
+            url: empty_to_none(request.url),
+            notes: empty_to_none(request.notes),
+        },
+        WriteMode::InPlace { backup_dir },
+    )
+    .map_err(safe_error)?
+    .ok_or_else(|| "add entry dry-run returned no write report".to_string())
+}
+
+#[tauri::command]
+fn edit_entry(
+    path: String,
+    password: String,
+    key_file: Option<String>,
+    entry_id: String,
+    request: GuiEditEntryRequest,
+) -> GuiResult<WriteReport> {
+    let credentials = credentials_from_gui(password, key_file);
+    let backup_dir = optional_path(request.backup_dir);
+    AnahtarService::edit_entry(
+        &path,
+        &credentials,
+        &entry_id,
+        EditEntryRequest {
+            title: empty_to_none(request.title),
+            username: empty_to_none(request.username),
+            password: empty_to_none(request.password),
+            url: empty_to_none(request.url),
+            notes: empty_to_none(request.notes),
+        },
+        WriteMode::InPlace { backup_dir },
+    )
+    .map_err(safe_error)?
+    .ok_or_else(|| "edit entry dry-run returned no write report".to_string())
+}
+
+#[tauri::command]
+fn delete_entry(
+    path: String,
+    password: String,
+    key_file: Option<String>,
+    entry_id: String,
+    backup_dir: Option<String>,
+) -> GuiResult<WriteReport> {
+    let credentials = credentials_from_gui(password, key_file);
+    AnahtarService::delete_entry(
+        &path,
+        &credentials,
+        &entry_id,
+        WriteMode::InPlace {
+            backup_dir: optional_path(backup_dir),
+        },
+    )
+    .map_err(safe_error)?
+    .ok_or_else(|| "delete entry dry-run returned no write report".to_string())
+}
+
 fn credentials_from_gui(password: String, key_file: Option<String>) -> VaultCredentials {
     VaultCredentials {
         password,
@@ -98,6 +196,17 @@ fn selector_from_gui(kind: &str, value: String) -> GuiResult<EntrySelector> {
     }
 }
 
+fn optional_path(value: Option<String>) -> Option<PathBuf> {
+    empty_to_none(value).map(PathBuf::from)
+}
+
+fn empty_to_none(value: Option<String>) -> Option<String> {
+    value.and_then(|value| {
+        let trimmed = value.trim().to_string();
+        (!trimmed.is_empty()).then_some(trimmed)
+    })
+}
+
 fn safe_error(error: impl std::fmt::Display) -> String {
     error.to_string()
 }
@@ -111,7 +220,10 @@ pub fn run() {
             unlock_vault,
             search_entries,
             show_entry,
-            totp_code
+            totp_code,
+            add_entry,
+            edit_entry,
+            delete_entry
         ])
         .run(tauri::generate_context!())
         .expect("failed to run Anahtar GUI");
@@ -170,5 +282,64 @@ mod tests {
         let err = unlock_vault(path, "wrong-password".to_string(), None).unwrap_err();
         assert!(err.contains("failed to open database"));
         assert!(!err.contains("wrong-password"));
+    }
+
+    #[test]
+    fn write_commands_update_generated_vault_copy_and_report_backup() {
+        let source = generated_vault_path();
+        if !std::path::Path::new(&source).exists() {
+            return;
+        }
+
+        let temp = tempfile::tempdir().unwrap();
+        let target = temp.path().join("gui-write.kdbx");
+        std::fs::copy(source, &target).unwrap();
+        let backup_dir = temp.path().join("backups").to_string_lossy().to_string();
+        let target = target.to_string_lossy().to_string();
+
+        let add_report = add_entry(
+            target.clone(),
+            "testpass".to_string(),
+            None,
+            GuiAddEntryRequest {
+                group_path: "General/Web".to_string(),
+                title: "GUI Write Test".to_string(),
+                username: Some("gui-user".to_string()),
+                password: Some("gui-pass".to_string()),
+                url: Some("https://gui.example.com".to_string()),
+                notes: Some("created from GUI command test".to_string()),
+                backup_dir: Some(backup_dir.clone()),
+            },
+        )
+        .unwrap();
+        assert!(add_report.backup_path.is_some());
+        let entry_id = add_report.changed_entry_id.unwrap();
+
+        let edit_report = edit_entry(
+            target.clone(),
+            "testpass".to_string(),
+            None,
+            entry_id.clone(),
+            GuiEditEntryRequest {
+                title: None,
+                username: Some("gui-user-updated".to_string()),
+                password: None,
+                url: None,
+                notes: None,
+                backup_dir: Some(backup_dir.clone()),
+            },
+        )
+        .unwrap();
+        assert!(edit_report.backup_path.is_some());
+
+        let delete_report = delete_entry(
+            target,
+            "testpass".to_string(),
+            None,
+            entry_id,
+            Some(backup_dir),
+        )
+        .unwrap();
+        assert!(delete_report.backup_path.is_some());
     }
 }
