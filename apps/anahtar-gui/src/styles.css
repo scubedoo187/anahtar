@@ -30,7 +30,7 @@ button:hover {
 }
 
 .shell {
-  width: min(960px, calc(100vw - 3rem));
+  width: min(1180px, calc(100vw - 3rem));
   margin: 0 auto;
   padding: 5rem 0;
 }
@@ -141,15 +141,97 @@ button:disabled {
   opacity: 0.55;
 }
 
-.output {
-  min-height: 10rem;
+.workspace-grid {
+  display: grid;
+  grid-template-columns: minmax(18rem, 0.95fr) minmax(22rem, 1.05fr);
+  gap: 1rem;
+}
+
+.entry-list {
+  display: grid;
+  gap: 0.6rem;
+  max-height: 34rem;
   overflow: auto;
-  white-space: pre-wrap;
+}
+
+.entry-row {
+  display: grid;
+  gap: 0.25rem;
+  width: 100%;
+  border: 1px solid rgba(241, 194, 125, 0.14);
+  padding: 0.85rem;
+  color: #f4efe8;
+  text-align: left;
+  background: rgba(0, 0, 0, 0.22);
+}
+
+.entry-row:hover,
+.entry-row.selected {
+  color: #151515;
+  background: #f1c27d;
+}
+
+.entry-row span,
+.entry-row code {
+  overflow: hidden;
+  color: inherit;
+  font-size: 0.8rem;
+  opacity: 0.84;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.detail-output,
+.output {
+  overflow: auto;
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 0.75rem;
   padding: 1rem;
   color: #f5eadb;
   background: rgba(0, 0, 0, 0.28);
+}
+
+.output {
+  min-height: 5rem;
+  white-space: pre-wrap;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
   font-size: 0.88rem;
+}
+
+.output.compact {
+  min-height: 4rem;
+}
+
+.detail-output {
+  display: grid;
+  gap: 0.6rem;
+  min-height: 24rem;
+  align-content: start;
+}
+
+.detail-output h3 {
+  margin: 1rem 0 0;
+}
+
+.detail-line {
+  display: grid;
+  grid-template-columns: 9rem minmax(0, 1fr);
+  gap: 0.8rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.detail-label {
+  color: #c8bfb4;
+  font-weight: 800;
+}
+
+.detail-value {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 860px) {
+  .workspace-grid {
+    grid-template-columns: 1fr;
+  }
 }

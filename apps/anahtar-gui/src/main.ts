@@ -7,7 +7,6 @@ import {
   versionLabel,
   type EntryDetail,
   type EntrySummary,
-  type SelectorKind,
   type VaultRequest,
 } from "./api";
 import "./styles.css";
@@ -21,6 +20,9 @@ if (!app) {
 const defaultVaultPath = "../../test-vaults/generated/phase3-base.kdbx";
 let activeSession: VaultRequest | null = null;
 let activeEntries: EntrySummary[] = [];
+let selectedEntryId: string | null = null;
+let selectedDetail: EntryDetail | null = null;
+let detailRevealed = false;
 
 app.innerHTML = `
   <section class="shell">
@@ -62,41 +64,33 @@ app.innerHTML = `
       </div>
 
       <div id="session-status" class="status locked">Locked</div>
+      <div id="command-output" class="output compact" aria-live="polite">No command run yet.</div>
     </section>
 
-    <section class="card command-surface">
-      <h2>Read commands</h2>
-      <p class="hint">Unlock first. Search and show reuse the in-memory alpha session.</p>
-
-      <label>
-        Search query
-        <input id="search-query" type="text" value="Github" disabled />
-      </label>
-      <button id="search-entries" type="button" disabled>Search</button>
-
-      <div class="selector-row">
+    <section class="workspace-grid">
+      <section class="card entry-browser">
+        <h2>Entries</h2>
+        <p class="hint">Unlock first. Selecting an entry uses its UUID for detail lookup.</p>
         <label>
-          Selector kind
-          <select id="selector-kind" disabled>
-            <option value="title">title</option>
-            <option value="id">id</option>
-            <option value="url">url</option>
-            <option value="username">username</option>
-            <option value="auto">auto</option>
-          </select>
+          Search query
+          <input id="search-query" type="search" value="Github" disabled />
         </label>
-        <label>
-          Selector value
-          <input id="selector-value" type="text" value="Github Test" disabled />
-        </label>
-      </div>
-      <label class="checkbox-label">
-        <input id="reveal-password" type="checkbox" disabled />
-        Reveal password for detail command
-      </label>
-      <button id="show-entry" type="button" disabled>Show detail</button>
+        <div class="button-row">
+          <button id="search-entries" type="button" disabled>Search</button>
+          <button id="reset-list" type="button" disabled>Show unlocked list</button>
+        </div>
+        <div id="entry-list" class="entry-list" aria-live="polite">No vault unlocked.</div>
+      </section>
 
-      <div id="command-output" class="output" aria-live="polite">No command run yet.</div>
+      <section class="card detail-panel">
+        <h2>Entry detail</h2>
+        <p class="hint">Passwords and protected fields are hidden by default.</p>
+        <div class="button-row">
+          <button id="reload-detail" type="button" disabled>Reload safe detail</button>
+          <button id="reveal-detail" type="button" disabled>Reveal sensitive fields</button>
+        </div>
+        <div id="entry-detail" class="detail-output" aria-live="polite">Select an entry to view details.</div>
+      </section>
     </section>
   </section>
 `;
@@ -109,7 +103,9 @@ bindButton("#inspect-vault", runInspect);
 bindButton("#unlock-vault", runUnlock);
 bindButton("#lock-vault", lockVault);
 bindButton("#search-entries", runSearch);
-bindButton("#show-entry", runShow);
+bindButton("#reset-list", resetList);
+bindButton("#reload-detail", reloadSafeDetail);
+bindButton("#reveal-detail", revealSelectedDetail);
 
 async function refreshBackendStatus(): Promise<void> {
   const statusEl = document.querySelector<HTMLParagraphElement>("#backend-status");
@@ -143,17 +139,27 @@ async function runUnlock(): Promise<void> {
     const entries = await unlockVault(request);
     activeSession = request;
     activeEntries = entries;
+    selectedEntryId = null;
+    selectedDetail = null;
+    detailRevealed = false;
     clearPasswordInput();
     renderSessionState();
-    return renderEntries("Unlocked entries", entries);
+    renderEntryList(entries);
+    renderEmptyDetail("Select an entry to view details.");
+    return `Unlocked ${entries.length} entries. Select an entry from the list to view safe details.`;
   });
 }
 
 function lockVault(): Promise<void> {
   activeSession = null;
   activeEntries = [];
+  selectedEntryId = null;
+  selectedDetail = null;
+  detailRevealed = false;
   clearPasswordInput();
   renderSessionState();
+  renderEntryList([]);
+  renderEmptyDetail("Select an entry to view details.");
   outputEl().textContent = "Locked. In-memory session cleared.";
   return Promise.resolve();
 }
@@ -163,21 +169,59 @@ async function runSearch(): Promise<void> {
     const session = requireSession();
     const entries = await searchEntries(session, inputValue("#search-query"));
     activeEntries = entries;
-    return renderEntries("Search results", entries);
+    selectedEntryId = null;
+    selectedDetail = null;
+    detailRevealed = false;
+    renderEntryList(entries);
+    renderEmptyDetail("Select a search result to view details.");
+    renderSessionState();
+    return `Search returned ${entries.length} entries.`;
   });
 }
 
-async function runShow(): Promise<void> {
-  await renderCommand(async () => {
-    const session = requireSession();
-    const detail = await showEntry(
-      session,
-      selectorKind(),
-      inputValue("#selector-value"),
-      checkboxValue("#reveal-password"),
-    );
-    return renderDetail(detail);
-  });
+function resetList(): Promise<void> {
+  selectedEntryId = null;
+  selectedDetail = null;
+  detailRevealed = false;
+  renderEntryList(activeEntries);
+  renderEmptyDetail("Select an entry to view details.");
+  outputEl().textContent = `Showing ${activeEntries.length} entries from current in-memory list.`;
+  renderSessionState();
+  return Promise.resolve();
+}
+
+async function selectEntry(entryId: string): Promise<void> {
+  selectedEntryId = entryId;
+  detailRevealed = false;
+  renderEntryList(activeEntries);
+  await loadSelectedDetail(false);
+}
+
+async function reloadSafeDetail(): Promise<void> {
+  await loadSelectedDetail(false);
+}
+
+async function revealSelectedDetail(): Promise<void> {
+  await loadSelectedDetail(true);
+}
+
+async function loadSelectedDetail(revealPassword: boolean): Promise<void> {
+  const session = requireSession();
+  if (!selectedEntryId) {
+    throw new Error("select an entry first");
+  }
+
+  const detailEl = detailOutputEl();
+  detailEl.textContent = "Loading detail…";
+  try {
+    const detail = await showEntry(session, "id", selectedEntryId, revealPassword);
+    selectedDetail = detail;
+    detailRevealed = revealPassword;
+    renderEntryDetail(detail, revealPassword);
+    renderSessionState();
+  } catch (error) {
+    detailEl.textContent = `Error: ${errorMessage(error)}`;
+  }
 }
 
 async function renderCommand(action: () => Promise<string>): Promise<void> {
@@ -190,32 +234,93 @@ async function renderCommand(action: () => Promise<string>): Promise<void> {
   }
 }
 
-function renderEntries(title: string, entries: EntrySummary[]): string {
-  const lines = entries.slice(0, 20).map((entry) => {
-    const title = entry.title ?? "<untitled>";
-    const username = entry.username ?? "";
-    const url = entry.url ?? "";
-    return `- ${title} | ${username} | ${url} | ${entry.id}`;
-  });
-  return `${title}: ${entries.length}\n${lines.join("\n")}`;
+function renderEntryList(entries: EntrySummary[]): void {
+  const list = entryListEl();
+  list.textContent = "";
+
+  if (!activeSession) {
+    list.textContent = "No vault unlocked.";
+    return;
+  }
+
+  if (entries.length === 0) {
+    list.textContent = "No entries to show.";
+    return;
+  }
+
+  for (const entry of entries) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = entry.id === selectedEntryId ? "entry-row selected" : "entry-row";
+    button.addEventListener("click", () => {
+      void selectEntry(entry.id);
+    });
+
+    const title = document.createElement("strong");
+    title.textContent = entry.title ?? "<untitled>";
+
+    const meta = document.createElement("span");
+    meta.textContent = `${entry.group_path} · ${entry.username ?? ""} · ${entry.url ?? ""}`;
+
+    const id = document.createElement("code");
+    id.textContent = entry.id;
+
+    button.append(title, meta, id);
+    list.append(button);
+  }
 }
 
-function renderDetail(detail: EntryDetail): string {
-  const password = detail.password ? "<revealed>" : "<hidden>";
-  const customFields = detail.custom_fields
-    .map((field) => `  - ${field.key}: ${field.protected ? "<protected>" : field.value}`)
-    .join("\n");
-  return [
-    `ID: ${detail.id}`,
-    `Group: ${detail.group_path}`,
-    `Title: ${detail.title ?? ""}`,
-    `Username: ${detail.username ?? ""}`,
-    `URL: ${detail.url ?? ""}`,
-    `Notes: ${detail.notes ?? ""}`,
-    `Password: ${password}`,
-    `Custom fields:`,
-    customFields || "  <none>",
-  ].join("\n");
+function renderEntryDetail(detail: EntryDetail, revealPassword: boolean): void {
+  const detailEl = detailOutputEl();
+  detailEl.textContent = "";
+
+  detailEl.append(
+    detailLine("ID", detail.id),
+    detailLine("Group", detail.group_path),
+    detailLine("Title", detail.title ?? ""),
+    detailLine("Username", detail.username ?? ""),
+    detailLine("URL", detail.url ?? ""),
+    detailLine("Notes", detail.notes ?? ""),
+    detailLine("Password", revealPassword ? (detail.password ?? "") : "<hidden>"),
+    detailLine("Sensitive fields", revealPassword ? "revealed by explicit action" : "hidden"),
+  );
+
+  const customTitle = document.createElement("h3");
+  customTitle.textContent = "Custom fields";
+  detailEl.append(customTitle);
+
+  if (detail.custom_fields.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "muted";
+    empty.textContent = "No custom fields.";
+    detailEl.append(empty);
+    return;
+  }
+
+  for (const field of detail.custom_fields) {
+    detailEl.append(detailLine(field.key, field.value));
+  }
+}
+
+function detailLine(label: string, value: string): HTMLDivElement {
+  const row = document.createElement("div");
+  row.className = "detail-line";
+
+  const labelEl = document.createElement("span");
+  labelEl.className = "detail-label";
+  labelEl.textContent = label;
+
+  const valueEl = document.createElement("span");
+  valueEl.className = "detail-value";
+  valueEl.textContent = value;
+
+  row.append(labelEl, valueEl);
+  return row;
+}
+
+function renderEmptyDetail(message: string): void {
+  const detailEl = detailOutputEl();
+  detailEl.textContent = message;
 }
 
 function formVaultRequest(): VaultRequest {
@@ -240,10 +345,9 @@ function renderSessionState(): void {
   setDisabled("#key-file", unlocked);
   setDisabled("#search-query", !unlocked);
   setDisabled("#search-entries", !unlocked);
-  setDisabled("#selector-kind", !unlocked);
-  setDisabled("#selector-value", !unlocked);
-  setDisabled("#reveal-password", !unlocked);
-  setDisabled("#show-entry", !unlocked);
+  setDisabled("#reset-list", !unlocked);
+  setDisabled("#reload-detail", !unlocked || !selectedEntryId);
+  setDisabled("#reveal-detail", !unlocked || !selectedEntryId || detailRevealed);
 
   const status = document.querySelector<HTMLDivElement>("#session-status");
   if (!status) return;
@@ -267,17 +371,9 @@ function vaultPath(): string {
   return inputValue("#vault-path");
 }
 
-function selectorKind(): SelectorKind {
-  return inputValue("#selector-kind") as SelectorKind;
-}
-
 function inputValue(selector: string): string {
   const input = document.querySelector<HTMLInputElement | HTMLSelectElement>(selector);
   return input?.value ?? "";
-}
-
-function checkboxValue(selector: string): boolean {
-  return document.querySelector<HTMLInputElement>(selector)?.checked ?? false;
 }
 
 function outputEl(): HTMLDivElement {
@@ -286,6 +382,22 @@ function outputEl(): HTMLDivElement {
     throw new Error("command output element missing");
   }
   return output;
+}
+
+function entryListEl(): HTMLDivElement {
+  const list = document.querySelector<HTMLDivElement>("#entry-list");
+  if (!list) {
+    throw new Error("entry list element missing");
+  }
+  return list;
+}
+
+function detailOutputEl(): HTMLDivElement {
+  const detail = document.querySelector<HTMLDivElement>("#entry-detail");
+  if (!detail) {
+    throw new Error("entry detail element missing");
+  }
+  return detail;
 }
 
 function setDisabled(selector: string, disabled: boolean): void {
