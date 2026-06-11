@@ -65,6 +65,7 @@ name = "anahtar-gui"
 version = "0.1.0"
 dependencies = [
  "anahtar-app",
+ "anahtar-core",
  "serde",
  "tauri",
  "tauri-build",
