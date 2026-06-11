@@ -19,7 +19,8 @@ if (!app) {
 }
 
 const defaultVaultPath = "../../test-vaults/generated/phase3-base.kdbx";
-const defaultPassword = "testpass";
+let activeSession: VaultRequest | null = null;
+let activeEntries: EntrySummary[] = [];
 
 app.innerHTML = `
   <section class="shell">
@@ -36,8 +37,8 @@ app.innerHTML = `
     </section>
 
     <section class="card command-surface">
-      <h2>Slice 2 backend command surface</h2>
-      <p class="hint">Uses generated test vault defaults. Password is kept in this page state only for alpha command testing.</p>
+      <h2>Unlock vault</h2>
+      <p class="hint">Password is kept in memory only for this alpha session. It is cleared when you lock or close the app.</p>
 
       <label>
         Vault path
@@ -51,24 +52,32 @@ app.innerHTML = `
 
       <label>
         Master password
-        <input id="master-password" type="password" value="${defaultPassword}" autocomplete="off" />
+        <input id="master-password" type="password" autocomplete="off" />
       </label>
 
       <div class="button-row">
         <button id="inspect-vault" type="button">Inspect</button>
         <button id="unlock-vault" type="button">Unlock/List</button>
+        <button id="lock-vault" type="button" disabled>Lock</button>
       </div>
+
+      <div id="session-status" class="status locked">Locked</div>
+    </section>
+
+    <section class="card command-surface">
+      <h2>Read commands</h2>
+      <p class="hint">Unlock first. Search and show reuse the in-memory alpha session.</p>
 
       <label>
         Search query
-        <input id="search-query" type="text" value="Github" />
+        <input id="search-query" type="text" value="Github" disabled />
       </label>
-      <button id="search-entries" type="button">Search</button>
+      <button id="search-entries" type="button" disabled>Search</button>
 
       <div class="selector-row">
         <label>
           Selector kind
-          <select id="selector-kind">
+          <select id="selector-kind" disabled>
             <option value="title">title</option>
             <option value="id">id</option>
             <option value="url">url</option>
@@ -78,14 +87,14 @@ app.innerHTML = `
         </label>
         <label>
           Selector value
-          <input id="selector-value" type="text" value="Github Test" />
+          <input id="selector-value" type="text" value="Github Test" disabled />
         </label>
       </div>
       <label class="checkbox-label">
-        <input id="reveal-password" type="checkbox" />
+        <input id="reveal-password" type="checkbox" disabled />
         Reveal password for detail command
       </label>
-      <button id="show-entry" type="button">Show detail</button>
+      <button id="show-entry" type="button" disabled>Show detail</button>
 
       <div id="command-output" class="output" aria-live="polite">No command run yet.</div>
     </section>
@@ -93,10 +102,12 @@ app.innerHTML = `
 `;
 
 void refreshBackendStatus();
+renderSessionState();
 
 bindButton("#refresh-status", refreshBackendStatus);
 bindButton("#inspect-vault", runInspect);
 bindButton("#unlock-vault", runUnlock);
+bindButton("#lock-vault", lockVault);
 bindButton("#search-entries", runSearch);
 bindButton("#show-entry", runShow);
 
@@ -121,22 +132,46 @@ async function runInspect(): Promise<void> {
 
 async function runUnlock(): Promise<void> {
   await renderCommand(async () => {
-    const entries = await unlockVault(vaultRequest());
+    const request = formVaultRequest();
+    if (!request.path.trim()) {
+      throw new Error("vault path is required");
+    }
+    if (!request.password) {
+      throw new Error("master password is required");
+    }
+
+    const entries = await unlockVault(request);
+    activeSession = request;
+    activeEntries = entries;
+    clearPasswordInput();
+    renderSessionState();
     return renderEntries("Unlocked entries", entries);
   });
 }
 
+function lockVault(): Promise<void> {
+  activeSession = null;
+  activeEntries = [];
+  clearPasswordInput();
+  renderSessionState();
+  outputEl().textContent = "Locked. In-memory session cleared.";
+  return Promise.resolve();
+}
+
 async function runSearch(): Promise<void> {
   await renderCommand(async () => {
-    const entries = await searchEntries(vaultRequest(), inputValue("#search-query"));
+    const session = requireSession();
+    const entries = await searchEntries(session, inputValue("#search-query"));
+    activeEntries = entries;
     return renderEntries("Search results", entries);
   });
 }
 
 async function runShow(): Promise<void> {
   await renderCommand(async () => {
+    const session = requireSession();
     const detail = await showEntry(
-      vaultRequest(),
+      session,
       selectorKind(),
       inputValue("#selector-value"),
       checkboxValue("#reveal-password"),
@@ -183,12 +218,49 @@ function renderDetail(detail: EntryDetail): string {
   ].join("\n");
 }
 
-function vaultRequest(): VaultRequest {
+function formVaultRequest(): VaultRequest {
   return {
     path: vaultPath(),
     password: inputValue("#master-password"),
     keyFile: inputValue("#key-file"),
   };
+}
+
+function requireSession(): VaultRequest {
+  if (!activeSession) {
+    throw new Error("unlock the vault first");
+  }
+  return activeSession;
+}
+
+function renderSessionState(): void {
+  const unlocked = activeSession !== null;
+  setDisabled("#lock-vault", !unlocked);
+  setDisabled("#vault-path", unlocked);
+  setDisabled("#key-file", unlocked);
+  setDisabled("#search-query", !unlocked);
+  setDisabled("#search-entries", !unlocked);
+  setDisabled("#selector-kind", !unlocked);
+  setDisabled("#selector-value", !unlocked);
+  setDisabled("#reveal-password", !unlocked);
+  setDisabled("#show-entry", !unlocked);
+
+  const status = document.querySelector<HTMLDivElement>("#session-status");
+  if (!status) return;
+  if (unlocked) {
+    status.className = "status unlocked";
+    status.textContent = `Unlocked: ${activeEntries.length} entries loaded. Password is held in memory only.`;
+  } else {
+    status.className = "status locked";
+    status.textContent = "Locked";
+  }
+}
+
+function clearPasswordInput(): void {
+  const input = document.querySelector<HTMLInputElement>("#master-password");
+  if (input) {
+    input.value = "";
+  }
 }
 
 function vaultPath(): string {
@@ -214,6 +286,15 @@ function outputEl(): HTMLDivElement {
     throw new Error("command output element missing");
   }
   return output;
+}
+
+function setDisabled(selector: string, disabled: boolean): void {
+  const element = document.querySelector<HTMLInputElement | HTMLButtonElement | HTMLSelectElement>(
+    selector,
+  );
+  if (element) {
+    element.disabled = disabled;
+  }
 }
 
 function bindButton(selector: string, handler: () => Promise<void>): void {
