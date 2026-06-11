@@ -240,7 +240,7 @@ function normalizeAddRequest(entry: AddEntryRequest): AddEntryRequest {
     group_path: entry.group_path,
     title: entry.title,
     username: emptyToNull(entry.username),
-    password: emptyToNull(entry.password),
+    password: emptySecretToNull(entry.password),
     url: emptyToNull(entry.url),
     notes: emptyToNull(entry.notes),
     backup_dir: emptyToNull(entry.backup_dir),
@@ -251,7 +251,7 @@ function normalizeEditRequest(entry: EditEntryRequest): EditEntryRequest {
   return {
     title: emptyToNull(entry.title),
     username: emptyToNull(entry.username),
-    password: emptyToNull(entry.password),
+    password: emptySecretToNull(entry.password),
     url: emptyToNull(entry.url),
     notes: emptyToNull(entry.notes),
     backup_dir: emptyToNull(entry.backup_dir),
@@ -261,4 +261,8 @@ function normalizeEditRequest(entry: EditEntryRequest): EditEntryRequest {
 function emptyToNull(value?: string | null): string | null {
   const trimmed = value?.trim() ?? "";
   return trimmed.length > 0 ? trimmed : null;
+}
+
+function emptySecretToNull(value?: string | null): string | null {
+  return value && value.length > 0 ? value : null;
 }

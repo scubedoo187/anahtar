@@ -109,11 +109,7 @@ fn list_groups(
 }
 
 #[tauri::command]
-fn audit_vault(
-    path: String,
-    password: String,
-    key_file: Option<String>,
-) -> GuiResult<AuditReport> {
+fn audit_vault(path: String, password: String, key_file: Option<String>) -> GuiResult<AuditReport> {
     let credentials = credentials_from_gui(password, key_file);
     AnahtarService::audit(path, &credentials).map_err(safe_error)
 }
@@ -134,7 +130,7 @@ fn add_entry(
             group_path: request.group_path,
             title: request.title,
             username: empty_to_none(request.username),
-            password: empty_to_none(request.password),
+            password: empty_secret_to_none(request.password),
             url: empty_to_none(request.url),
             notes: empty_to_none(request.notes),
         },
@@ -161,7 +157,7 @@ fn edit_entry(
         EditEntryRequest {
             title: empty_to_none(request.title),
             username: empty_to_none(request.username),
-            password: empty_to_none(request.password),
+            password: empty_secret_to_none(request.password),
             url: empty_to_none(request.url),
             notes: empty_to_none(request.notes),
         },
@@ -225,6 +221,10 @@ fn empty_to_none(value: Option<String>) -> Option<String> {
         let trimmed = value.trim().to_string();
         (!trimmed.is_empty()).then_some(trimmed)
     })
+}
+
+fn empty_secret_to_none(value: Option<String>) -> Option<String> {
+    value.and_then(|value| (!value.is_empty()).then_some(value))
 }
 
 fn safe_error(error: impl std::fmt::Display) -> String {
@@ -299,6 +299,15 @@ mod tests {
         let audit = audit_vault(path, "testpass".to_string(), None).unwrap();
         let audit_json = serde_json::to_string(&audit).unwrap();
         assert!(!audit_json.contains("github-pass"));
+    }
+
+    #[test]
+    fn empty_secret_to_none_preserves_non_empty_secret_whitespace() {
+        assert_eq!(
+            empty_secret_to_none(Some("  spaced  ".to_string())).as_deref(),
+            Some("  spaced  ")
+        );
+        assert_eq!(empty_secret_to_none(Some(String::new())), None);
     }
 
     #[test]
