@@ -39,9 +39,9 @@ Commands:
 
 ## Exit criteria
 
-- [x] `inspect` reports KDBX4.0 for `assets/private-vault.backup.kdbx`.
-- [x] `inspect` reports KDBX4.1 for `assets/private-vault.kdbx41.test.kdbx`.
-- [x] `list` works on `assets/private-vault.kdbx41.test.kdbx` after password prompt.
+- [x] `inspect` reports KDBX4.0 for `assets/masked-local-vault.backup.kdbx`.
+- [x] `inspect` reports KDBX4.1 for `assets/masked-local-vault.kdbx41.test.kdbx`.
+- [x] `list` works on `assets/masked-local-vault.kdbx41.test.kdbx` after password prompt.
 - [x] `search` finds expected entries.
 - [x] `show` displays non-secret fields by default.
 - [x] No command prints passwords unless `--reveal-password` is explicitly passed.

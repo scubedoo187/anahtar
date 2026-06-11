@@ -41,7 +41,7 @@ Implement `anahtar upgrade <input> <output>` so KDBX3/KDBX4.0/KDBX4.1 inputs can
 
 ## Notes
 
-Phase 2 validation was completed manually by the user against `assets/private-vault.backup.kdbx` → `assets/private-vault.phase2.kdbx`.
+Phase 2 validation was completed manually by the user against `assets/masked-local-vault.backup.kdbx` → `assets/masked-local-vault.phase2.kdbx`.
 
 Observed result:
 

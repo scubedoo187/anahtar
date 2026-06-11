@@ -1504,7 +1504,7 @@ mod tests {
 
     #[test]
     fn upgrade_rejects_same_input_and_output_before_unlock() {
-        let backup = Path::new("../../assets/private-vault.backup.kdbx");
+        let backup = Path::new("../../assets/masked-local-vault.backup.kdbx");
         if backup.exists() {
             let err = upgrade_to_kdbx41(backup, backup, "not-the-real-password", false, false)
                 .expect_err("same input/output must be rejected before opening DB");
@@ -2005,12 +2005,12 @@ mod tests {
 
     #[test]
     fn inspect_known_assets() {
-        let backup = Path::new("../../assets/private-vault.backup.kdbx");
+        let backup = Path::new("../../assets/masked-local-vault.backup.kdbx");
         if backup.exists() {
             let info = inspect_header(backup).unwrap();
             assert_eq!(info.version, KdbxVersion::Kdbx { major: 4, minor: 0 });
         }
-        let upgraded = Path::new("../../assets/private-vault.kdbx41.test.kdbx");
+        let upgraded = Path::new("../../assets/masked-local-vault.kdbx41.test.kdbx");
         if upgraded.exists() {
             let info = inspect_header(upgraded).unwrap();
             assert_eq!(info.version, KdbxVersion::Kdbx { major: 4, minor: 1 });

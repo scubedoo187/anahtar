@@ -271,7 +271,7 @@ Use two fixture types:
 Personal vault policy:
 
 - Do not use the personal vault for iterative write-command development.
-- Use `assets/private-vault.kdbx41.test.kdbx` only for final smoke tests after test-vault flows pass.
+- Use `assets/masked-local-vault.kdbx41.test.kdbx` only for final smoke tests after test-vault flows pass.
 
 ## Implementation checklist
 
@@ -365,7 +365,7 @@ test-vaults/generated/phase3-base.kdbx
 Use the personal KDBX4.1 test vault only after the generated test-vault flow passes:
 
 ```bash
-assets/private-vault.kdbx41.test.kdbx
+assets/masked-local-vault.kdbx41.test.kdbx
 ```
 
 ### Add verification
@@ -373,7 +373,7 @@ assets/private-vault.kdbx41.test.kdbx
 ```bash
 cargo run -q -p anahtar-cli -- add \
   'test-vaults/generated/phase3-base.kdbx' \
-  --output 'assets/private-vault.phase3.add.kdbx' \
+  --output 'assets/masked-local-vault.phase3.add.kdbx' \
   --group 'General/Web' \
   --title 'Anahtar Test Entry' \
   --username 'anahtar@example.com' \
@@ -386,35 +386,35 @@ Then:
 
 ```bash
 cargo run -q -p anahtar-cli -- search \
-  'assets/private-vault.phase3.add.kdbx' \
+  'assets/masked-local-vault.phase3.add.kdbx' \
   'Anahtar Test Entry'
 ```
 
-Open `assets/private-vault.phase3.add.kdbx` in Strongbox.
+Open `assets/masked-local-vault.phase3.add.kdbx` in Strongbox.
 
 ### Edit verification
 
 ```bash
 cargo run -q -p anahtar-cli -- edit \
-  'assets/private-vault.phase3.add.kdbx' \
+  'assets/masked-local-vault.phase3.add.kdbx' \
   '<new-entry-id>' \
-  --output 'assets/private-vault.phase3.edit.kdbx' \
+  --output 'assets/masked-local-vault.phase3.edit.kdbx' \
   --username 'updated-anahtar@example.com' \
   --notes 'Updated during Anahtar Phase 3 verification'
 ```
 
-Open `assets/private-vault.phase3.edit.kdbx` in Strongbox.
+Open `assets/masked-local-vault.phase3.edit.kdbx` in Strongbox.
 
 ### Delete verification
 
 ```bash
 cargo run -q -p anahtar-cli -- delete \
-  'assets/private-vault.phase3.edit.kdbx' \
+  'assets/masked-local-vault.phase3.edit.kdbx' \
   '<new-entry-id>' \
-  --output 'assets/private-vault.phase3.delete.kdbx'
+  --output 'assets/masked-local-vault.phase3.delete.kdbx'
 ```
 
-Open `assets/private-vault.phase3.delete.kdbx` in Strongbox and confirm the test entry is gone.
+Open `assets/masked-local-vault.phase3.delete.kdbx` in Strongbox and confirm the test entry is gone.
 
 ## Decisions accepted for Phase 3
 
