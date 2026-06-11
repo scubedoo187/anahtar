@@ -29,3 +29,6 @@
 !.env.example
 /secrets/
 /.secrets/
+
+# Local-only working journals
+/journals/
