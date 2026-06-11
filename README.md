@@ -17,7 +17,10 @@ Completed:
   - group management and entry move
   - non-secret audit reports
   - shell completions and CI
-- Phase 5.5: UI-readiness cleanup in progress
+- Phase 5.5: UI-readiness cleanup
+  - `anahtar-app` service facade for GUI/CLI reuse
+  - GUI API contract
+  - stronger CI/product smoke checks
 
 Upcoming:
 
@@ -48,9 +51,10 @@ See `docs/threat-model.md` for the detailed threat model.
 ## Build, test, and install
 
 ```bash
-cargo fmt --all
-cargo clippy --workspace --all-targets -- -D warnings
+cargo fmt --all -- --check
 cargo test --workspace
+cargo clippy --workspace --all-targets -- -D warnings
+cargo check --workspace --examples
 ```
 
 Run the CLI through Cargo:
@@ -80,7 +84,17 @@ Release builds should use Cargo's release profile:
 cargo build --release -p anahtar-cli
 ```
 
-Dependency security tools such as `cargo audit`/`cargo deny` are deferred to a later security-hardening pass so policy tuning does not block Phase 5 productization.
+Product smoke check:
+
+```bash
+tmp="$(mktemp -d)"
+cargo install --path crates/anahtar-cli --root "$tmp" --quiet
+"$tmp/bin/anahtar" --version
+"$tmp/bin/anahtar" completions bash >/tmp/anahtar-completions.bash
+rm -rf "$tmp"
+```
+
+Dependency security tools such as `cargo audit`/`cargo deny` are deferred to a later security-hardening pass so policy tuning does not block product work.
 
 ## Generate synthetic Phase 3 test vault
 
@@ -270,19 +284,25 @@ cargo run -q -p anahtar-cli -- upgrade \
 
 ```text
 crates/
-  anahtar-core/   # KDBX core operations and tests
-  anahtar-cli/    # CLI wrapper
-docs/             # roadmap, phase plans, research notes
-journals/         # dated work log
+  anahtar-core/   # KDBX domain operations and safe public DTOs
+  anahtar-app/    # stateless GUI/CLI application service facade
+  anahtar-cli/    # CLI product surface, prompts, config, printing, clipboard
+docs/             # roadmap, phase plans, threat model, GUI API contract
 spikes/           # research/prototype code
 test-vaults/      # README plus ignored local/generated fixtures
 ```
 
+Local `journals/` are intentionally ignored and are not part of the public repository.
+
 ## Planning docs
 
+- `PLAN.md`
 - `docs/anahtar-roadmap.md`
 - `docs/anahtar-final-goals.md`
-- `docs/phase-plans/phase-1-readonly-cli.md`
-- `docs/phase-plans/phase-2-upgrade-save-as.md`
-- `docs/phase-plans/phase-3-minimal-write.md`
-- `docs/phase-plans/phase-4-daily-use-cli.md`
+- `docs/threat-model.md`
+- `docs/gui-api-contract.md`
+- `docs/phase-plans/phase-5-cli-password-manager-productization.md`
+- `docs/phase-plans/phase-5-5-ui-readiness-cleanup.md`
+- `docs/phase-plans/phase-6-gui-alpha.md`
+
+Older phase plan files remain as historical implementation records.
