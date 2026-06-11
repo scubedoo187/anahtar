@@ -1,4 +1,7 @@
-use anahtar_core::{EntryDetail, EntrySummary, TotpCode, UpgradeReport, VaultInfo, WriteReport};
+use anahtar_core::{
+    AuditReport, EntryDetail, EntrySummary, GroupSummary, TotpCode, UpgradeReport, VaultInfo,
+    WriteReport,
+};
 use anyhow::Result;
 
 pub fn print_vault_info(info: &VaultInfo, json: bool) -> Result<()> {
@@ -30,6 +33,64 @@ pub fn print_entries(entries: &[EntrySummary], json: bool) -> Result<()> {
     Ok(())
 }
 
+pub fn print_dry_run(
+    operation: &str,
+    target: &std::path::Path,
+    output: Option<&std::path::PathBuf>,
+    json: bool,
+) -> Result<()> {
+    if json {
+        println!(
+            "{}",
+            serde_json::json!({
+                "operation": operation,
+                "dry_run": true,
+                "target": target,
+                "output": output,
+                "would_write": false
+            })
+        );
+    } else {
+        println!("Operation: {operation}");
+        println!("Target: {}", target.display());
+        if let Some(output) = output {
+            println!("Output: {}", output.display());
+        }
+        println!("Dry run: no file was written.");
+    }
+    Ok(())
+}
+
+pub fn print_groups(groups: &[GroupSummary], json: bool) -> Result<()> {
+    if json {
+        println!("{}", serde_json::to_string_pretty(groups)?);
+    } else {
+        for group in groups {
+            println!(
+                "{}\t{}\tentries={}\tchildren={}",
+                group.id, group.path, group.entry_count, group.child_group_count
+            );
+        }
+    }
+    Ok(())
+}
+
+pub fn print_audit(report: &AuditReport, json: bool) -> Result<()> {
+    if json {
+        println!("{}", serde_json::to_string_pretty(report)?);
+    } else if report.findings.is_empty() {
+        println!("No audit findings.");
+    } else {
+        for finding in &report.findings {
+            println!(
+                "{}\t{}\t{}\t{}",
+                finding.kind, finding.entry_id, finding.group_path, finding.message
+            );
+        }
+    }
+    Ok(())
+}
+
 pub fn print_write_report(report: &WriteReport, json: bool) -> Result<()> {
     if json {
         println!("{}", serde_json::to_string_pretty(report)?);
@@ -49,7 +110,17 @@ pub fn print_write_report(report: &WriteReport, json: bool) -> Result<()> {
         if let Some(id) = &report.changed_entry_id {
             println!("Changed entry id: {id}");
         }
-        println!("Write complete. Original input was not modified.");
+        if let Some(backup_path) = &report.backup_path {
+            println!("Backup: {}", backup_path.display());
+        }
+        if let Some(final_target_path) = &report.final_target_path {
+            println!("Final target: {}", final_target_path.display());
+        }
+        if report.final_target_path.is_some() {
+            println!("Write complete. Target vault was safely updated in place.");
+        } else {
+            println!("Write complete. Original input was not modified.");
+        }
         println!("Next: open the output file in Strongbox and manually verify it before using it as a primary vault.");
     }
     Ok(())

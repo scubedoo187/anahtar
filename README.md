@@ -20,6 +20,8 @@ All write commands currently write a new KDBX4.1 output file and do **not** modi
 
 ## Safety model
 
+See `docs/threat-model.md` for the detailed threat model.
+
 - Do not commit real `.kdbx`, `.kdb`, `.key`, or `.keyx` files.
 - `assets/` is ignored and is intended only for local/private vault copies.
 - Generated test vault binaries are ignored and can be regenerated locally.
@@ -28,10 +30,11 @@ All write commands currently write a new KDBX4.1 output file and do **not** modi
 - Existing output files are protected unless `--force` is passed.
 - `input == output` is rejected for write commands.
 
-## Build and test
+## Build, test, and install
 
 ```bash
 cargo fmt --all
+cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 ```
 
@@ -40,6 +43,29 @@ Run the CLI through Cargo:
 ```bash
 cargo run -q -p anahtar-cli -- --help
 ```
+
+Install locally:
+
+```bash
+cargo install --path crates/anahtar-cli
+anahtar --version
+```
+
+Generate shell completions:
+
+```bash
+anahtar completions zsh > _anahtar
+anahtar completions bash > anahtar.bash
+anahtar completions fish > anahtar.fish
+```
+
+Release builds should use Cargo's release profile:
+
+```bash
+cargo build --release -p anahtar-cli
+```
+
+Dependency security tools such as `cargo audit`/`cargo deny` are deferred to a later security-hardening pass so policy tuning does not block Phase 5 productization.
 
 ## Generate synthetic Phase 3 test vault
 
@@ -82,6 +108,20 @@ cargo run -q -p anahtar-cli -- config set clipboard-clear-after 30
 
 All vault commands accept `--vault <path>` to override the default.
 
+If your KeePass vault uses a key file, configure it once:
+
+```bash
+cargo run -q -p anahtar-cli -- config set key-file /path/to/vault.keyx
+```
+
+Or pass it per command:
+
+```bash
+cargo run -q -p anahtar-cli -- list --key-file /path/to/vault.keyx
+```
+
+`config set key-file` requires the key file to exist and stores its canonical absolute path, matching the default vault path behavior. The key-file path is local configuration, not secret material, but the key-file contents must still be protected.
+
 ## Clipboard behavior
 
 Clipboard commands use the operating system clipboard through `arboard`, so they require a desktop/session environment with clipboard access. Headless CI or SSH-only environments may not support clipboard commands.
@@ -114,18 +154,19 @@ Search entries:
 cargo run -q -p anahtar-cli -- search --vault test-vaults/generated/phase3-base.kdbx github
 ```
 
-Show an entry without revealing its password:
+Show an entry without revealing its password. Explicit selectors are preferred for duplicate-safe workflows:
 
 ```bash
-cargo run -q -p anahtar-cli -- show --vault test-vaults/generated/phase3-base.kdbx "Github Test"
+cargo run -q -p anahtar-cli -- show --vault test-vaults/generated/phase3-base.kdbx --title "Github Test"
+cargo run -q -p anahtar-cli -- show --id '<entry-uuid>'
 ```
 
 Copy fields:
 
 ```bash
-cargo run -q -p anahtar-cli -- copy-password --vault test-vaults/generated/phase3-base.kdbx "Github Test"
-cargo run -q -p anahtar-cli -- copy-username --vault test-vaults/generated/phase3-base.kdbx "Github Test"
-cargo run -q -p anahtar-cli -- copy-url --vault test-vaults/generated/phase3-base.kdbx "Github Test"
+cargo run -q -p anahtar-cli -- copy-password --vault test-vaults/generated/phase3-base.kdbx --title "Github Test"
+cargo run -q -p anahtar-cli -- copy-username --vault test-vaults/generated/phase3-base.kdbx --id '<entry-uuid>'
+cargo run -q -p anahtar-cli -- copy-url --vault test-vaults/generated/phase3-base.kdbx --url 'https://github.com'
 ```
 
 Generate a password:
@@ -139,10 +180,21 @@ cargo run -q -p anahtar-cli -- generate --copy
 Show a TOTP code without exposing the OTP URI:
 
 ```bash
-cargo run -q -p anahtar-cli -- totp --vault path/to/vault-with-otp.kdbx "Entry Title"
+cargo run -q -p anahtar-cli -- totp --vault path/to/vault-with-otp.kdbx --title "Entry Title"
 ```
 
-Add an entry using save-as:
+Add an entry. When `--output` is omitted, Anahtar safely updates the configured/resolved vault in place by creating a backup, writing a verified temp output, replacing the target, and reopening the final target.
+
+```bash
+cargo run -q -p anahtar-cli -- add \
+  --group 'General/Web' \
+  --title 'Anahtar Test Entry' \
+  --username 'anahtar@example.com' \
+  --generate-password \
+  --url 'https://example.com'
+```
+
+Use explicit save-as by passing `--output`:
 
 ```bash
 cargo run -q -p anahtar-cli -- add \
@@ -162,7 +214,7 @@ cargo run -q -p anahtar-cli -- edit \
   --vault test-vaults/generated/outputs/phase3-add.kdbx \
   '<entry-uuid>' \
   --output test-vaults/generated/outputs/phase3-edit.kdbx \
-  --username 'updated-anahtar@example.com'
+  --set-username 'updated-anahtar@example.com'
 ```
 
 Delete an entry by UUID using save-as:
@@ -172,6 +224,23 @@ cargo run -q -p anahtar-cli -- delete \
   --vault test-vaults/generated/outputs/phase3-edit.kdbx \
   '<entry-uuid>' \
   --output test-vaults/generated/outputs/phase3-delete.kdbx
+```
+
+Group and organization commands:
+
+```bash
+cargo run -q -p anahtar-cli -- group list
+cargo run -q -p anahtar-cli -- group add 'General/API'
+cargo run -q -p anahtar-cli -- group rename 'General/API' 'Services'
+cargo run -q -p anahtar-cli -- group delete 'General/Old' --yes
+cargo run -q -p anahtar-cli -- move --id '<entry-uuid>' --group 'General/API'
+```
+
+Audit without printing secrets:
+
+```bash
+cargo run -q -p anahtar-cli -- audit
+cargo run -q -p anahtar-cli -- audit --json
 ```
 
 Upgrade/save-as to KDBX4.1:

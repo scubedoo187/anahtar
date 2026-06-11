@@ -11,6 +11,8 @@ pub const DEFAULT_CLIPBOARD_CLEAR_SECONDS: u64 = 30;
 #[serde(default)]
 pub struct AnahtarConfig {
     pub vault: Option<PathBuf>,
+    pub key_file: Option<PathBuf>,
+    pub backup_dir: Option<PathBuf>,
     pub generator_length: usize,
     pub clipboard_clear_after_seconds: u64,
 }
@@ -19,6 +21,8 @@ impl Default for AnahtarConfig {
     fn default() -> Self {
         Self {
             vault: None,
+            key_file: None,
+            backup_dir: None,
             generator_length: DEFAULT_GENERATOR_LENGTH,
             clipboard_clear_after_seconds: DEFAULT_CLIPBOARD_CLEAR_SECONDS,
         }
@@ -90,6 +94,22 @@ pub fn handle_config(command: ConfigCommand) -> Result<()> {
                         .map(|p| p.display().to_string())
                         .unwrap_or_default()
                 ),
+                "key-file" | "key_file" => println!(
+                    "{}",
+                    config
+                        .key_file
+                        .as_ref()
+                        .map(|p| p.display().to_string())
+                        .unwrap_or_default()
+                ),
+                "backup-dir" | "backup_dir" => println!(
+                    "{}",
+                    config
+                        .backup_dir
+                        .as_ref()
+                        .map(|p| p.display().to_string())
+                        .unwrap_or_default()
+                ),
                 "generator-length" | "generator_length" => println!("{}", config.generator_length),
                 "clipboard-clear-after" | "clipboard_clear_after_seconds" => {
                     println!("{}", config.clipboard_clear_after_seconds)
@@ -101,7 +121,18 @@ pub fn handle_config(command: ConfigCommand) -> Result<()> {
             let mut config = load_config()?;
             match command {
                 ConfigSetCommand::Vault { path } => {
-                    config.vault = Some(canonicalize_vault_path(path)?)
+                    config.vault = Some(canonicalize_existing_file(path, "vault")?)
+                }
+                ConfigSetCommand::KeyFile { path } => {
+                    config.key_file = Some(canonicalize_existing_file(path, "key-file")?)
+                }
+                ConfigSetCommand::BackupDir { path } => {
+                    fs::create_dir_all(&path)
+                        .with_context(|| format!("create backup dir {}", path.display()))?;
+                    config.backup_dir =
+                        Some(path.canonicalize().with_context(|| {
+                            format!("canonicalize backup dir {}", path.display())
+                        })?)
                 }
                 ConfigSetCommand::GeneratorLength { n } => {
                     validate_generator_length(n)?;
@@ -119,30 +150,32 @@ pub fn handle_config(command: ConfigCommand) -> Result<()> {
     Ok(())
 }
 
-fn canonicalize_vault_path(path: PathBuf) -> Result<PathBuf> {
+fn canonicalize_existing_file(path: PathBuf, label: &str) -> Result<PathBuf> {
     if !path.exists() {
-        anyhow::bail!("vault path does not exist: {}", path.display());
+        anyhow::bail!("{label} path does not exist: {}", path.display());
     }
     if !path.is_file() {
-        anyhow::bail!("vault path is not a file: {}", path.display());
+        anyhow::bail!("{label} path is not a file: {}", path.display());
     }
     path.canonicalize()
-        .with_context(|| format!("canonicalize vault path {}", path.display()))
+        .with_context(|| format!("canonicalize {label} path {}", path.display()))
 }
 
 #[cfg(test)]
 mod tests {
-    use super::canonicalize_vault_path;
+    use super::canonicalize_existing_file;
     use std::fs;
 
     #[test]
     fn canonicalize_vault_path_requires_existing_file() {
         let dir = tempfile::tempdir().unwrap();
         let missing = dir.path().join("missing.kdbx");
-        let err = canonicalize_vault_path(missing).unwrap_err().to_string();
+        let err = canonicalize_existing_file(missing, "vault")
+            .unwrap_err()
+            .to_string();
         assert!(err.contains("vault path does not exist"));
 
-        let err = canonicalize_vault_path(dir.path().to_path_buf())
+        let err = canonicalize_existing_file(dir.path().to_path_buf(), "vault")
             .unwrap_err()
             .to_string();
         assert!(err.contains("vault path is not a file"));
@@ -154,7 +187,7 @@ mod tests {
         let vault = dir.path().join("vault.kdbx");
         fs::write(&vault, b"not a real vault").unwrap();
 
-        let canonical = canonicalize_vault_path(vault).unwrap();
+        let canonical = canonicalize_existing_file(vault, "vault").unwrap();
         assert!(canonical.is_absolute());
         assert!(canonical.ends_with("vault.kdbx"));
     }

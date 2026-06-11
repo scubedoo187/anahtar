@@ -32,9 +32,3 @@ pub fn ensure_edit_has_change(
     }
     Ok(())
 }
-
-pub fn validate_uuid_selector(selector: &str) -> Result<()> {
-    uuid::Uuid::parse_str(selector)
-        .map(|_| ())
-        .map_err(|_| anyhow::anyhow!("delete requires an entry UUID selector"))
-}

@@ -11,9 +11,11 @@ use keepass::{
 };
 use serde::Serialize;
 use std::{
+    collections::HashMap,
     fs::File,
     io::{Read, Write},
     path::{Path, PathBuf},
+    time::{SystemTime, UNIX_EPOCH},
 };
 use thiserror::Error;
 use uuid::Uuid;
@@ -79,11 +81,53 @@ impl std::fmt::Display for KdbxVersion {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct VaultCredentials {
+    pub password: String,
+    pub key_file: Option<PathBuf>,
+}
+
+impl VaultCredentials {
+    pub fn password_only(password: impl Into<String>) -> Self {
+        Self {
+            password: password.into(),
+            key_file: None,
+        }
+    }
+
+    pub fn with_key_file(password: impl Into<String>, key_file: impl Into<PathBuf>) -> Self {
+        Self {
+            password: password.into(),
+            key_file: Some(key_file.into()),
+        }
+    }
+
+    fn to_database_key(&self) -> Result<DatabaseKey> {
+        let mut key = DatabaseKey::new().with_password(&self.password);
+        if let Some(path) = &self.key_file {
+            let mut file = File::open(path)?;
+            key = key
+                .with_keyfile(&mut file)
+                .map_err(|_| AnahtarError::OpenDatabase)?;
+        }
+        Ok(key)
+    }
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct VaultInfo {
     pub path: PathBuf,
     pub file_size_bytes: u64,
     pub version: KdbxVersion,
+}
+
+#[derive(Debug, Clone)]
+pub enum EntrySelector {
+    Id(String),
+    Title(String),
+    Url(String),
+    Username(String),
+    Auto(String),
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -93,6 +137,15 @@ pub struct EntrySummary {
     pub title: Option<String>,
     pub username: Option<String>,
     pub url: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct GroupSummary {
+    pub id: String,
+    pub path: String,
+    pub name: String,
+    pub entry_count: usize,
+    pub child_group_count: usize,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -113,6 +166,20 @@ pub struct CustomField {
     pub key: String,
     pub value: String,
     pub protected: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct AuditFinding {
+    pub kind: String,
+    pub entry_id: String,
+    pub title: Option<String>,
+    pub group_path: String,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct AuditReport {
+    pub findings: Vec<AuditFinding>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -143,6 +210,12 @@ pub struct SaveAsOptions {
 }
 
 #[derive(Debug, Clone)]
+pub struct InPlaceOptions {
+    pub target_path: PathBuf,
+    pub backup_dir: Option<PathBuf>,
+}
+
+#[derive(Debug, Clone)]
 pub struct AddEntryRequest {
     pub group_path: String,
     pub title: String,
@@ -168,6 +241,10 @@ pub enum WriteOperation {
     Add,
     Edit,
     Delete,
+    GroupAdd,
+    GroupRename,
+    GroupDelete,
+    MoveEntry,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -182,6 +259,10 @@ pub struct WriteReport {
     pub output_group_count: usize,
     pub output_entry_count: usize,
     pub changed_entry_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub backup_path: Option<PathBuf>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub final_target_path: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -226,9 +307,15 @@ pub fn inspect_header(path: impl AsRef<Path>) -> Result<VaultInfo> {
 }
 
 pub fn open_database(path: impl AsRef<Path>, password: &str) -> Result<Database> {
+    open_database_with_credentials(path, &VaultCredentials::password_only(password))
+}
+
+pub fn open_database_with_credentials(
+    path: impl AsRef<Path>,
+    credentials: &VaultCredentials,
+) -> Result<Database> {
     let mut f = File::open(path)?;
-    Database::open(&mut f, DatabaseKey::new().with_password(password))
-        .map_err(|_| AnahtarError::OpenDatabase)
+    Database::open(&mut f, credentials.to_database_key()?).map_err(|_| AnahtarError::OpenDatabase)
 }
 
 pub fn database_version(db: &Database) -> KdbxVersion {
@@ -247,6 +334,69 @@ pub fn list_entries(db: &Database) -> Vec<EntrySummary> {
     out
 }
 
+pub fn audit_database(db: &Database) -> AuditReport {
+    let mut findings = Vec::new();
+    let mut password_groups: HashMap<String, Vec<EntrySummary>> = HashMap::new();
+    for entry in list_entries(db) {
+        if entry.username.as_deref().unwrap_or("").is_empty() {
+            findings.push(AuditFinding {
+                kind: "missing_username".to_string(),
+                entry_id: entry.id.clone(),
+                title: entry.title.clone(),
+                group_path: entry.group_path.clone(),
+                message: "entry has no username".to_string(),
+            });
+        }
+        if entry.url.as_deref().unwrap_or("").is_empty() {
+            findings.push(AuditFinding {
+                kind: "missing_url".to_string(),
+                entry_id: entry.id.clone(),
+                title: entry.title.clone(),
+                group_path: entry.group_path.clone(),
+                message: "entry has no url".to_string(),
+            });
+        }
+        if let Some(detail) = find_entry(db, &entry.id) {
+            if detail.get_otp().is_ok() {
+                findings.push(AuditFinding {
+                    kind: "totp_available".to_string(),
+                    entry_id: entry.id.clone(),
+                    title: entry.title.clone(),
+                    group_path: entry.group_path.clone(),
+                    message: "entry has TOTP configured".to_string(),
+                });
+            }
+            if let Some(password) = detail.get_password() {
+                password_groups
+                    .entry(password.to_string())
+                    .or_default()
+                    .push(entry.clone());
+                if password.len() < 12 {
+                    findings.push(AuditFinding {
+                        kind: "weak_password".to_string(),
+                        entry_id: entry.id.clone(),
+                        title: entry.title.clone(),
+                        group_path: entry.group_path.clone(),
+                        message: "password is shorter than 12 characters".to_string(),
+                    });
+                }
+            }
+        }
+    }
+    for entries in password_groups.values().filter(|entries| entries.len() > 1) {
+        for entry in entries {
+            findings.push(AuditFinding {
+                kind: "reused_password".to_string(),
+                entry_id: entry.id.clone(),
+                title: entry.title.clone(),
+                group_path: entry.group_path.clone(),
+                message: format!("password is reused by {} entries", entries.len()),
+            });
+        }
+    }
+    AuditReport { findings }
+}
+
 pub fn search_entries(db: &Database, query: &str) -> Vec<EntrySummary> {
     let needle = query.to_lowercase();
     list_entries(db)
@@ -262,9 +412,21 @@ pub fn search_entries(db: &Database, query: &str) -> Vec<EntrySummary> {
 }
 
 pub fn show_entry(db: &Database, selector: &str, reveal_password: bool) -> Result<EntryDetail> {
-    let summary = resolve_entry_summary(db, selector)?;
+    show_entry_by_selector(
+        db,
+        &EntrySelector::Auto(selector.to_string()),
+        reveal_password,
+    )
+}
+
+pub fn show_entry_by_selector(
+    db: &Database,
+    selector: &EntrySelector,
+    reveal_password: bool,
+) -> Result<EntryDetail> {
+    let summary = resolve_entry_summary_by_selector(db, selector)?;
     let entry = find_entry(db, &summary.id)
-        .ok_or_else(|| AnahtarError::EntryNotFound(selector.to_string()))?;
+        .ok_or_else(|| AnahtarError::EntryNotFound(selector_label(selector)))?;
     Ok(detail_from_entry(
         entry,
         summary.group_path,
@@ -273,15 +435,19 @@ pub fn show_entry(db: &Database, selector: &str, reveal_password: bool) -> Resul
 }
 
 pub fn totp_code(db: &Database, selector: &str) -> Result<TotpCode> {
-    let summary = resolve_entry_summary(db, selector)?;
+    totp_code_by_selector(db, &EntrySelector::Auto(selector.to_string()))
+}
+
+pub fn totp_code_by_selector(db: &Database, selector: &EntrySelector) -> Result<TotpCode> {
+    let summary = resolve_entry_summary_by_selector(db, selector)?;
     let entry = find_entry(db, &summary.id)
-        .ok_or_else(|| AnahtarError::EntryNotFound(selector.to_string()))?;
+        .ok_or_else(|| AnahtarError::EntryNotFound(selector_label(selector)))?;
     let otp = entry
         .get_otp()
-        .map_err(|_| AnahtarError::TotpUnavailable(selector.to_string()))?;
+        .map_err(|_| AnahtarError::TotpUnavailable(selector_label(selector)))?;
     let code = otp
         .value_now()
-        .map_err(|_| AnahtarError::TotpUnavailable(selector.to_string()))?;
+        .map_err(|_| AnahtarError::TotpUnavailable(selector_label(selector)))?;
     Ok(TotpCode {
         code: code.code,
         valid_for_seconds: code.valid_for.as_secs(),
@@ -296,6 +462,22 @@ pub fn upgrade_to_kdbx41(
     force: bool,
     dry_run: bool,
 ) -> Result<UpgradeReport> {
+    upgrade_to_kdbx41_with_credentials(
+        input,
+        output,
+        &VaultCredentials::password_only(password),
+        force,
+        dry_run,
+    )
+}
+
+pub fn upgrade_to_kdbx41_with_credentials(
+    input: impl AsRef<Path>,
+    output: impl AsRef<Path>,
+    credentials: &VaultCredentials,
+    force: bool,
+    dry_run: bool,
+) -> Result<UpgradeReport> {
     let input = input.as_ref();
     let output = output.as_ref();
 
@@ -303,7 +485,7 @@ pub fn upgrade_to_kdbx41(
         return Err(AnahtarError::InputOutputSame(output.to_path_buf()));
     }
 
-    let mut db = open_database(input, password)?;
+    let mut db = open_database_with_credentials(input, credentials)?;
     let input_version = database_version(&db);
     let input_group_count = count_groups(&db);
     let input_entry_count = db.iter_all_entries().count();
@@ -335,7 +517,7 @@ pub fn upgrade_to_kdbx41(
         &mut db,
         input,
         output,
-        password,
+        credentials,
         force,
         SaveAsVerification {
             expected_group_count: input_group_count,
@@ -355,9 +537,23 @@ pub fn add_entry_save_as(
     options: SaveAsOptions,
     request: AddEntryRequest,
 ) -> Result<WriteReport> {
+    add_entry_save_as_with_credentials(
+        input,
+        &VaultCredentials::password_only(password),
+        options,
+        request,
+    )
+}
+
+pub fn add_entry_save_as_with_credentials(
+    input: impl AsRef<Path>,
+    credentials: &VaultCredentials,
+    options: SaveAsOptions,
+    request: AddEntryRequest,
+) -> Result<WriteReport> {
     let input = input.as_ref();
     ensure_input_output_distinct(input, &options.output_path)?;
-    let mut db = open_database(input, password)?;
+    let mut db = open_database_with_credentials(input, credentials)?;
     let input_version = database_version(&db);
     let input_group_count = count_groups(&db);
     let input_entry_count = db.iter_all_entries().count();
@@ -389,7 +585,7 @@ pub fn add_entry_save_as(
         &mut db,
         input,
         &output_path,
-        password,
+        credentials,
         options.force,
         SaveAsVerification {
             expected_group_count: input_group_count,
@@ -414,6 +610,8 @@ pub fn add_entry_save_as(
         output_group_count,
         output_entry_count,
         changed_entry_id: Some(changed_entry_id),
+        backup_path: None,
+        final_target_path: None,
     })
 }
 
@@ -424,9 +622,25 @@ pub fn edit_entry_save_as(
     options: SaveAsOptions,
     request: EditEntryRequest,
 ) -> Result<WriteReport> {
+    edit_entry_save_as_with_credentials(
+        input,
+        selector,
+        &VaultCredentials::password_only(password),
+        options,
+        request,
+    )
+}
+
+pub fn edit_entry_save_as_with_credentials(
+    input: impl AsRef<Path>,
+    selector: &str,
+    credentials: &VaultCredentials,
+    options: SaveAsOptions,
+    request: EditEntryRequest,
+) -> Result<WriteReport> {
     let input = input.as_ref();
     ensure_input_output_distinct(input, &options.output_path)?;
-    let mut db = open_database(input, password)?;
+    let mut db = open_database_with_credentials(input, credentials)?;
     let input_version = database_version(&db);
     let input_group_count = count_groups(&db);
     let input_entry_count = db.iter_all_entries().count();
@@ -460,7 +674,7 @@ pub fn edit_entry_save_as(
         &mut db,
         input,
         &output_path,
-        password,
+        credentials,
         options.force,
         SaveAsVerification {
             expected_group_count: input_group_count,
@@ -484,6 +698,8 @@ pub fn edit_entry_save_as(
         output_group_count,
         output_entry_count,
         changed_entry_id: Some(changed_entry_id),
+        backup_path: None,
+        final_target_path: None,
     })
 }
 
@@ -493,12 +709,26 @@ pub fn delete_entry_save_as(
     password: &str,
     options: SaveAsOptions,
 ) -> Result<WriteReport> {
+    delete_entry_save_as_with_credentials(
+        input,
+        entry_id,
+        &VaultCredentials::password_only(password),
+        options,
+    )
+}
+
+pub fn delete_entry_save_as_with_credentials(
+    input: impl AsRef<Path>,
+    entry_id: &str,
+    credentials: &VaultCredentials,
+    options: SaveAsOptions,
+) -> Result<WriteReport> {
     let input = input.as_ref();
     ensure_input_output_distinct(input, &options.output_path)?;
     let uuid =
         Uuid::parse_str(entry_id).map_err(|_| AnahtarError::EntryNotFound(entry_id.to_string()))?;
     let entry_id = keepass::db::EntryId::from_uuid(uuid);
-    let mut db = open_database(input, password)?;
+    let mut db = open_database_with_credentials(input, credentials)?;
     let input_version = database_version(&db);
     let input_group_count = count_groups(&db);
     let input_entry_count = db.iter_all_entries().count();
@@ -517,7 +747,7 @@ pub fn delete_entry_save_as(
         &mut db,
         input,
         &output_path,
-        password,
+        credentials,
         options.force,
         SaveAsVerification {
             expected_group_count: input_group_count,
@@ -545,7 +775,304 @@ pub fn delete_entry_save_as(
         output_group_count,
         output_entry_count,
         changed_entry_id: Some(changed_entry_id),
+        backup_path: None,
+        final_target_path: None,
     })
+}
+
+pub fn list_groups(db: &Database) -> Vec<GroupSummary> {
+    let mut out = Vec::new();
+    collect_group_summaries(db.root(), db.root().name.clone(), &mut out);
+    out.sort_by(|a, b| a.path.cmp(&b.path));
+    out
+}
+
+pub fn add_group_save_as_with_credentials(
+    input: impl AsRef<Path>,
+    credentials: &VaultCredentials,
+    options: SaveAsOptions,
+    group_path: &str,
+) -> Result<WriteReport> {
+    let input = input.as_ref();
+    ensure_input_output_distinct(input, &options.output_path)?;
+    let mut db = open_database_with_credentials(input, credentials)?;
+    let input_version = database_version(&db);
+    let input_group_count = count_groups(&db);
+    let input_entry_count = db.iter_all_entries().count();
+    let (parent_path, name) = split_group_parent(group_path)?;
+    let parent_id = if parent_path.is_empty() {
+        db.root().id()
+    } else {
+        group_id_by_path(&db, parent_path)?
+    };
+    {
+        let parent = db
+            .group(parent_id)
+            .ok_or_else(|| AnahtarError::GroupNotFound(parent_path.to_string()))?;
+        if parent.group_by_name(name).is_some() {
+            return Err(AnahtarError::InvalidGroupPath(format!(
+                "group already exists: {group_path}"
+            )));
+        }
+    }
+    let changed_entry_id = {
+        let mut parent = db
+            .group_mut(parent_id)
+            .ok_or_else(|| AnahtarError::GroupNotFound(parent_path.to_string()))?;
+        let mut group = parent.add_group();
+        group.edit(|g| g.name = name.to_string());
+        group.id().uuid().to_string()
+    };
+    let output_path = options.output_path;
+    let (output_group_count, output_entry_count) = save_as_kdbx41_verified(
+        &mut db,
+        input,
+        &output_path,
+        credentials,
+        options.force,
+        SaveAsVerification {
+            expected_group_count: input_group_count + 1,
+            expected_entry_count: input_entry_count,
+        },
+        |_| Ok(()),
+    )?;
+    Ok(write_report(
+        WriteOperation::GroupAdd,
+        input,
+        output_path,
+        input_version,
+        input_group_count,
+        input_entry_count,
+        output_group_count,
+        output_entry_count,
+        Some(changed_entry_id),
+    ))
+}
+
+pub fn rename_group_save_as_with_credentials(
+    input: impl AsRef<Path>,
+    credentials: &VaultCredentials,
+    options: SaveAsOptions,
+    group_path: &str,
+    new_name: &str,
+) -> Result<WriteReport> {
+    let input = input.as_ref();
+    ensure_input_output_distinct(input, &options.output_path)?;
+    let mut db = open_database_with_credentials(input, credentials)?;
+    let input_version = database_version(&db);
+    let input_group_count = count_groups(&db);
+    let input_entry_count = db.iter_all_entries().count();
+    let group_id = group_id_by_path(&db, group_path)?;
+    db.group_mut(group_id)
+        .ok_or_else(|| AnahtarError::GroupNotFound(group_path.to_string()))?
+        .edit(|g| g.name = new_name.to_string());
+    let output_path = options.output_path;
+    let changed_entry_id = group_id.uuid().to_string();
+    let (output_group_count, output_entry_count) = save_as_kdbx41_verified(
+        &mut db,
+        input,
+        &output_path,
+        credentials,
+        options.force,
+        SaveAsVerification {
+            expected_group_count: input_group_count,
+            expected_entry_count: input_entry_count,
+        },
+        |_| Ok(()),
+    )?;
+    Ok(write_report(
+        WriteOperation::GroupRename,
+        input,
+        output_path,
+        input_version,
+        input_group_count,
+        input_entry_count,
+        output_group_count,
+        output_entry_count,
+        Some(changed_entry_id),
+    ))
+}
+
+pub fn delete_group_save_as_with_credentials(
+    input: impl AsRef<Path>,
+    credentials: &VaultCredentials,
+    options: SaveAsOptions,
+    group_path: &str,
+) -> Result<WriteReport> {
+    let input = input.as_ref();
+    ensure_input_output_distinct(input, &options.output_path)?;
+    let mut db = open_database_with_credentials(input, credentials)?;
+    let input_version = database_version(&db);
+    let input_group_count = count_groups(&db);
+    let input_entry_count = db.iter_all_entries().count();
+    let group_id = group_id_by_path(&db, group_path)?;
+    let removed_entries = db.group(group_id).map(|g| g.entries().count()).unwrap_or(0);
+    db.group_mut(group_id)
+        .ok_or_else(|| AnahtarError::GroupNotFound(group_path.to_string()))?
+        .remove();
+    let output_path = options.output_path;
+    let changed_entry_id = group_id.uuid().to_string();
+    let expected_groups = input_group_count.saturating_sub(1);
+    let expected_entries = input_entry_count.saturating_sub(removed_entries);
+    let (output_group_count, output_entry_count) = save_as_kdbx41_verified(
+        &mut db,
+        input,
+        &output_path,
+        credentials,
+        options.force,
+        SaveAsVerification {
+            expected_group_count: expected_groups,
+            expected_entry_count: expected_entries,
+        },
+        |_| Ok(()),
+    )?;
+    Ok(write_report(
+        WriteOperation::GroupDelete,
+        input,
+        output_path,
+        input_version,
+        input_group_count,
+        input_entry_count,
+        output_group_count,
+        output_entry_count,
+        Some(changed_entry_id),
+    ))
+}
+
+pub fn move_entry_save_as_with_credentials(
+    input: impl AsRef<Path>,
+    credentials: &VaultCredentials,
+    options: SaveAsOptions,
+    selector: &EntrySelector,
+    group_path: &str,
+) -> Result<WriteReport> {
+    let input = input.as_ref();
+    ensure_input_output_distinct(input, &options.output_path)?;
+    let mut db = open_database_with_credentials(input, credentials)?;
+    let input_version = database_version(&db);
+    let input_group_count = count_groups(&db);
+    let input_entry_count = db.iter_all_entries().count();
+    let entry_id = resolve_unique_entry_id_by_selector(&db, selector)?;
+    let group_id = group_id_by_path(&db, group_path)?;
+    db.entry_mut(entry_id)
+        .ok_or_else(|| AnahtarError::EntryNotFound(selector_label(selector)))?
+        .move_to(group_id)
+        .map_err(|_| AnahtarError::GroupNotFound(group_path.to_string()))?;
+    let output_path = options.output_path;
+    let changed_entry_id = entry_id.uuid().to_string();
+    let (output_group_count, output_entry_count) = save_as_kdbx41_verified(
+        &mut db,
+        input,
+        &output_path,
+        credentials,
+        options.force,
+        SaveAsVerification {
+            expected_group_count: input_group_count,
+            expected_entry_count: input_entry_count,
+        },
+        |_| Ok(()),
+    )?;
+    Ok(write_report(
+        WriteOperation::MoveEntry,
+        input,
+        output_path,
+        input_version,
+        input_group_count,
+        input_entry_count,
+        output_group_count,
+        output_entry_count,
+        Some(changed_entry_id),
+    ))
+}
+
+pub fn safe_in_place_write_with_credentials<F>(
+    credentials: &VaultCredentials,
+    options: InPlaceOptions,
+    save_as: F,
+) -> Result<WriteReport>
+where
+    F: FnOnce(&Path, &Path) -> Result<WriteReport>,
+{
+    let target = options.target_path;
+    let backup = backup_path_for(&target, options.backup_dir.as_deref())?;
+    let tmp = temp_in_place_path_for(&target)?;
+
+    if tmp.exists() {
+        return Err(AnahtarError::TempOutputExists(tmp));
+    }
+
+    if let Some(parent) = backup.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    std::fs::copy(&target, &backup)?;
+
+    let write_result = (|| -> Result<WriteReport> {
+        let mut report = save_as(&target, &tmp)?;
+        let verified = open_database_with_credentials(&tmp, credentials)?;
+        if count_groups(&verified) != report.output_group_count
+            || verified.iter_all_entries().count() != report.output_entry_count
+        {
+            return Err(AnahtarError::VerificationFailed(
+                "temporary in-place verification count mismatch".to_string(),
+            ));
+        }
+
+        replace_target_with_tmp(&tmp, &target, &backup)?;
+
+        let final_verified = match open_database_with_credentials(&target, credentials) {
+            Ok(db) => db,
+            Err(err) => {
+                let _ = restore_backup(&backup, &target);
+                return Err(err);
+            }
+        };
+        if count_groups(&final_verified) != report.output_group_count
+            || final_verified.iter_all_entries().count() != report.output_entry_count
+        {
+            let _ = restore_backup(&backup, &target);
+            return Err(AnahtarError::VerificationFailed(
+                "final in-place verification count mismatch; restored target from backup"
+                    .to_string(),
+            ));
+        }
+
+        report.output_path = target.clone();
+        report.backup_path = Some(backup.clone());
+        report.final_target_path = Some(target.clone());
+        Ok(report)
+    })();
+
+    match write_result {
+        Ok(report) => Ok(report),
+        Err(err) => {
+            let _ = std::fs::remove_file(&tmp);
+            Err(err)
+        }
+    }
+}
+
+fn replace_target_with_tmp(tmp: &Path, target: &Path, _backup: &Path) -> Result<()> {
+    match std::fs::rename(tmp, target) {
+        Ok(()) => Ok(()),
+        Err(err) => {
+            #[cfg(windows)]
+            {
+                if target.exists() {
+                    std::fs::remove_file(target)?;
+                    if let Err(rename_err) = std::fs::rename(tmp, target) {
+                        let _ = restore_backup(_backup, target);
+                        return Err(rename_err.into());
+                    }
+                    return Ok(());
+                }
+            }
+            Err(err.into())
+        }
+    }
+}
+
+fn restore_backup(backup: &Path, target: &Path) -> std::io::Result<()> {
+    std::fs::copy(backup, target).map(|_| ())
 }
 
 pub fn count_groups(db: &Database) -> usize {
@@ -559,7 +1086,7 @@ fn save_as_kdbx41_verified<F>(
     db: &mut Database,
     input: &Path,
     output: &Path,
-    password: &str,
+    credentials: &VaultCredentials,
     force: bool,
     verification: SaveAsVerification,
     verify_saved: F,
@@ -582,13 +1109,13 @@ where
     let write_result = (|| -> Result<(usize, usize)> {
         {
             let mut out = File::create(&tmp)?;
-            db.save(&mut out, DatabaseKey::new().with_password(password))
+            db.save(&mut out, credentials.to_database_key()?)
                 .map_err(|_| AnahtarError::SaveDatabase)?;
             out.flush()?;
             out.sync_all()?;
         }
 
-        let verified = open_database(&tmp, password)?;
+        let verified = open_database_with_credentials(&tmp, credentials)?;
         let output_group_count = count_groups(&verified);
         let output_entry_count = verified.iter_all_entries().count();
         if output_group_count != verification.expected_group_count
@@ -626,42 +1153,87 @@ fn ensure_input_output_distinct(input: &Path, output: &Path) -> Result<()> {
     Ok(())
 }
 
-fn resolve_entry_summary(db: &Database, selector: &str) -> Result<EntrySummary> {
-    list_entries(db)
+fn resolve_entry_summary_by_selector(
+    db: &Database,
+    selector: &EntrySelector,
+) -> Result<EntrySummary> {
+    let matches = list_entries(db)
         .into_iter()
-        .find(|e| {
-            e.id == selector
-                || e.title
-                    .as_deref()
-                    .is_some_and(|t| t.eq_ignore_ascii_case(selector))
-        })
-        .ok_or_else(|| AnahtarError::EntryNotFound(selector.to_string()))
-}
-
-fn resolve_unique_entry_id(db: &Database, selector: &str) -> Result<keepass::db::EntryId> {
-    if let Ok(uuid) = Uuid::parse_str(selector) {
-        let entry_id = keepass::db::EntryId::from_uuid(uuid);
-        if db.entry(entry_id).is_some() {
-            return Ok(entry_id);
-        }
-        return Err(AnahtarError::EntryNotFound(selector.to_string()));
-    }
-
-    let matches = db
-        .iter_all_entries()
-        .filter(|entry| {
-            entry
-                .get_title()
-                .is_some_and(|title| title.eq_ignore_ascii_case(selector))
-        })
-        .map(|entry| entry.id())
+        .filter(|e| entry_summary_matches(e, selector))
         .collect::<Vec<_>>();
 
     match matches.as_slice() {
-        [entry_id] => Ok(*entry_id),
-        [] => Err(AnahtarError::EntryNotFound(selector.to_string())),
-        _ => Err(AnahtarError::DuplicateEntrySelector(selector.to_string())),
+        [summary] => Ok(summary.clone()),
+        [] => Err(AnahtarError::EntryNotFound(selector_label(selector))),
+        _ => Err(AnahtarError::DuplicateEntrySelector(format!(
+            "{}; candidates: {}",
+            selector_label(selector),
+            matches
+                .iter()
+                .map(safe_candidate_summary)
+                .collect::<Vec<_>>()
+                .join(", ")
+        ))),
     }
+}
+
+fn resolve_unique_entry_id_by_selector(
+    db: &Database,
+    selector: &EntrySelector,
+) -> Result<keepass::db::EntryId> {
+    let summary = resolve_entry_summary_by_selector(db, selector)?;
+    let uuid = Uuid::parse_str(&summary.id)
+        .map_err(|_| AnahtarError::EntryNotFound(selector_label(selector)))?;
+    Ok(keepass::db::EntryId::from_uuid(uuid))
+}
+
+fn resolve_unique_entry_id(db: &Database, selector: &str) -> Result<keepass::db::EntryId> {
+    resolve_unique_entry_id_by_selector(db, &EntrySelector::Auto(selector.to_string()))
+}
+
+fn entry_summary_matches(entry: &EntrySummary, selector: &EntrySelector) -> bool {
+    match selector {
+        EntrySelector::Id(id) => entry.id.eq_ignore_ascii_case(id),
+        EntrySelector::Title(title) => entry
+            .title
+            .as_deref()
+            .is_some_and(|v| v.eq_ignore_ascii_case(title)),
+        EntrySelector::Url(url) => entry
+            .url
+            .as_deref()
+            .is_some_and(|v| v.eq_ignore_ascii_case(url) || v.contains(url)),
+        EntrySelector::Username(username) => entry
+            .username
+            .as_deref()
+            .is_some_and(|v| v.eq_ignore_ascii_case(username)),
+        EntrySelector::Auto(value) => {
+            entry.id.eq_ignore_ascii_case(value)
+                || entry
+                    .title
+                    .as_deref()
+                    .is_some_and(|v| v.eq_ignore_ascii_case(value))
+        }
+    }
+}
+
+fn selector_label(selector: &EntrySelector) -> String {
+    match selector {
+        EntrySelector::Id(value) => format!("id={value}"),
+        EntrySelector::Title(value) => format!("title={value}"),
+        EntrySelector::Url(value) => format!("url={value}"),
+        EntrySelector::Username(value) => format!("username={value}"),
+        EntrySelector::Auto(value) => value.clone(),
+    }
+}
+
+fn safe_candidate_summary(summary: &EntrySummary) -> String {
+    format!(
+        "id={} title={} username={} url={}",
+        summary.id,
+        summary.title.as_deref().unwrap_or(""),
+        summary.username.as_deref().unwrap_or(""),
+        summary.url.as_deref().unwrap_or("")
+    )
 }
 
 fn group_id_by_path(db: &Database, group_path: &str) -> Result<keepass::db::GroupId> {
@@ -683,6 +1255,49 @@ fn group_id_by_path(db: &Database, group_path: &str) -> Result<keepass::db::Grou
         .group_by_path(&parts)
         .map(|g| g.id())
         .ok_or_else(|| AnahtarError::GroupNotFound(group_path.to_string()))
+}
+
+fn backup_path_for(target: &Path, backup_dir: Option<&Path>) -> Result<PathBuf> {
+    let backup_dir = backup_dir.map(Path::to_path_buf).unwrap_or_else(|| {
+        target
+            .parent()
+            .unwrap_or_else(|| Path::new("."))
+            .join("anahtar-backups")
+    });
+    let stem = target
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("vault");
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|err| {
+            AnahtarError::VerificationFailed(format!("system clock before unix epoch: {err}"))
+        })?
+        .as_secs();
+
+    for suffix in 0..1000 {
+        let filename = if suffix == 0 {
+            format!("{stem}.{timestamp}.kdbx")
+        } else {
+            format!("{stem}.{timestamp}.{suffix}.kdbx")
+        };
+        let candidate = backup_dir.join(filename);
+        if !candidate.exists() {
+            return Ok(candidate);
+        }
+    }
+
+    Err(AnahtarError::TempOutputExists(
+        backup_dir.join(format!("{stem}.{timestamp}.kdbx")),
+    ))
+}
+
+fn temp_in_place_path_for(target: &Path) -> Result<PathBuf> {
+    let file_name = target
+        .file_name()
+        .and_then(|s| s.to_str())
+        .ok_or_else(|| AnahtarError::InvalidGroupPath("vault path has no file name".to_string()))?;
+    Ok(target.with_file_name(format!(".{file_name}.anahtar.tmp")))
 }
 
 fn temp_path_for(output: &Path) -> PathBuf {
@@ -708,6 +1323,59 @@ fn canonical_for_compare(path: &Path) -> std::io::Result<PathBuf> {
         .filter(|p| !p.as_os_str().is_empty())
         .unwrap_or(Path::new("."));
     Ok(parent.canonicalize()?.join(file_name))
+}
+
+#[allow(clippy::too_many_arguments)]
+fn write_report(
+    operation: WriteOperation,
+    input: &Path,
+    output_path: PathBuf,
+    input_version: KdbxVersion,
+    input_group_count: usize,
+    input_entry_count: usize,
+    output_group_count: usize,
+    output_entry_count: usize,
+    changed_entry_id: Option<String>,
+) -> WriteReport {
+    WriteReport {
+        operation,
+        input_path: input.to_path_buf(),
+        output_path,
+        input_version,
+        output_version: KdbxVersion::Kdbx { major: 4, minor: 1 },
+        input_group_count,
+        input_entry_count,
+        output_group_count,
+        output_entry_count,
+        changed_entry_id,
+        backup_path: None,
+        final_target_path: None,
+    }
+}
+
+fn split_group_parent(group_path: &str) -> Result<(&str, &str)> {
+    if group_path.is_empty() || group_path.starts_with('/') || group_path.ends_with('/') {
+        return Err(AnahtarError::InvalidGroupPath(group_path.to_string()));
+    }
+    let (parent, name) = group_path.rsplit_once('/').unwrap_or(("", group_path));
+    if name.is_empty() || parent.split('/').any(|p| p.is_empty()) && !parent.is_empty() {
+        return Err(AnahtarError::InvalidGroupPath(group_path.to_string()));
+    }
+    Ok((parent, name))
+}
+
+fn collect_group_summaries(group: GroupRef<'_>, path: String, out: &mut Vec<GroupSummary>) {
+    out.push(GroupSummary {
+        id: group.id().uuid().to_string(),
+        path: path.clone(),
+        name: group.name.clone(),
+        entry_count: group.entries().count(),
+        child_group_count: group.groups().count(),
+    });
+    for child in group.groups() {
+        let child_path = format!("{}/{}", path, child.name);
+        collect_group_summaries(child, child_path, out);
+    }
 }
 
 fn collect_summaries(group: GroupRef<'_>, path: String, out: &mut Vec<EntrySummary>) {
@@ -986,6 +1654,122 @@ mod tests {
     }
 
     #[test]
+    fn duplicate_title_error_shows_safe_candidate_summaries() {
+        let path = Path::new("../../test-vaults/generated/phase3-base.kdbx");
+        if path.exists() {
+            let db = open_database(path, "testpass").unwrap();
+            let err = show_entry_by_selector(
+                &db,
+                &EntrySelector::Title("Duplicate Title".to_string()),
+                false,
+            )
+            .unwrap_err()
+            .to_string();
+            assert!(err.contains("candidates:"));
+            assert!(err.contains("duplicate-web-user"));
+            assert!(!err.contains("duplicate-web-pass"));
+        }
+    }
+
+    #[test]
+    fn group_operations_save_as_work_on_synthetic_vault() {
+        let input = Path::new("../../test-vaults/generated/phase3-base.kdbx");
+        if input.exists() {
+            let dir = tempfile::tempdir().unwrap();
+            let credentials = VaultCredentials::password_only("testpass");
+
+            let group_added = dir.path().join("group-added.kdbx");
+            add_group_save_as_with_credentials(
+                input,
+                &credentials,
+                SaveAsOptions {
+                    output_path: group_added.clone(),
+                    force: false,
+                },
+                "General/API",
+            )
+            .unwrap();
+            let db = open_database(&group_added, "testpass").unwrap();
+            assert!(list_groups(&db)
+                .iter()
+                .any(|g| g.path == "Root/General/API"));
+
+            let renamed = dir.path().join("group-renamed.kdbx");
+            rename_group_save_as_with_credentials(
+                &group_added,
+                &credentials,
+                SaveAsOptions {
+                    output_path: renamed.clone(),
+                    force: false,
+                },
+                "General/API",
+                "Services",
+            )
+            .unwrap();
+            let db = open_database(&renamed, "testpass").unwrap();
+            assert!(list_groups(&db)
+                .iter()
+                .any(|g| g.path == "Root/General/Services"));
+
+            let moved = dir.path().join("moved.kdbx");
+            move_entry_save_as_with_credentials(
+                &renamed,
+                &credentials,
+                SaveAsOptions {
+                    output_path: moved.clone(),
+                    force: false,
+                },
+                &EntrySelector::Title("Github Test".to_string()),
+                "General/Services",
+            )
+            .unwrap();
+            let db = open_database(&moved, "testpass").unwrap();
+            assert_eq!(
+                show_entry(&db, "Github Test", false).unwrap().group_path,
+                "Root/General/Services"
+            );
+
+            let deleted = dir.path().join("deleted-group.kdbx");
+            delete_group_save_as_with_credentials(
+                &moved,
+                &credentials,
+                SaveAsOptions {
+                    output_path: deleted.clone(),
+                    force: false,
+                },
+                "General/Services",
+            )
+            .unwrap();
+            let db = open_database(&deleted, "testpass").unwrap();
+            assert!(!list_groups(&db)
+                .iter()
+                .any(|g| g.path == "Root/General/Services"));
+        }
+    }
+
+    #[test]
+    fn audit_database_never_reports_secret_values() {
+        let mut db = Database::new();
+        db.root_mut().add_entry().edit(|e| {
+            e.set_unprotected(fields::TITLE, "Weak Missing");
+            e.set_protected(fields::PASSWORD, "secret");
+        });
+        db.root_mut().add_entry().edit(|e| {
+            e.set_unprotected(fields::TITLE, "Reuse 1");
+            e.set_protected(fields::PASSWORD, "same-secret");
+        });
+        db.root_mut().add_entry().edit(|e| {
+            e.set_unprotected(fields::TITLE, "Reuse 2");
+            e.set_protected(fields::PASSWORD, "same-secret");
+        });
+        let json = serde_json::to_string(&audit_database(&db)).unwrap();
+        assert!(json.contains("weak_password"));
+        assert!(json.contains("reused_password"));
+        assert!(!json.contains("secret"));
+        assert!(!json.contains("same-secret"));
+    }
+
+    #[test]
     fn edit_entry_save_as_rejects_duplicate_title_selector() {
         let input = Path::new("../../test-vaults/generated/phase3-base.kdbx");
         if input.exists() {
@@ -1006,6 +1790,75 @@ mod tests {
             )
             .expect_err("duplicate title selector should fail");
             assert!(matches!(err, AnahtarError::DuplicateEntrySelector(_)));
+        }
+    }
+
+    #[test]
+    fn safe_in_place_write_creates_backup_and_updates_target() {
+        let input = Path::new("../../test-vaults/generated/phase3-base.kdbx");
+        if input.exists() {
+            let dir = tempfile::tempdir().unwrap();
+            let target = dir.path().join("target.kdbx");
+            let backup_dir = dir.path().join("backups");
+            std::fs::copy(input, &target).unwrap();
+            let credentials = VaultCredentials::password_only("testpass");
+            let report = safe_in_place_write_with_credentials(
+                &credentials,
+                InPlaceOptions {
+                    target_path: target.clone(),
+                    backup_dir: Some(backup_dir.clone()),
+                },
+                |source, output| {
+                    add_entry_save_as_with_credentials(
+                        source,
+                        &credentials,
+                        SaveAsOptions {
+                            output_path: output.to_path_buf(),
+                            force: false,
+                        },
+                        AddEntryRequest {
+                            group_path: "General/Web".to_string(),
+                            title: "In-place Test".to_string(),
+                            username: None,
+                            password: None,
+                            url: None,
+                            notes: None,
+                        },
+                    )
+                },
+            )
+            .unwrap();
+
+            assert_eq!(report.final_target_path.as_ref(), Some(&target));
+            assert!(report.backup_path.as_ref().unwrap().exists());
+            let updated = open_database(&target, "testpass").unwrap();
+            assert_eq!(updated.iter_all_entries().count(), 5);
+            let backup = open_database(report.backup_path.unwrap(), "testpass").unwrap();
+            assert_eq!(backup.iter_all_entries().count(), 4);
+        }
+    }
+
+    #[test]
+    fn safe_in_place_write_preserves_original_on_preflight_failure() {
+        let input = Path::new("../../test-vaults/generated/phase3-base.kdbx");
+        if input.exists() {
+            let dir = tempfile::tempdir().unwrap();
+            let target = dir.path().join("target.kdbx");
+            std::fs::copy(input, &target).unwrap();
+            let temp = dir.path().join(".target.kdbx.anahtar.tmp");
+            std::fs::write(&temp, b"collision").unwrap();
+            let credentials = VaultCredentials::password_only("testpass");
+            let result = safe_in_place_write_with_credentials(
+                &credentials,
+                InPlaceOptions {
+                    target_path: target.clone(),
+                    backup_dir: Some(dir.path().join("backups")),
+                },
+                |_source, _output| unreachable!(),
+            );
+            assert!(result.is_err());
+            let original = open_database(&target, "testpass").unwrap();
+            assert_eq!(original.iter_all_entries().count(), 4);
         }
     }
 
@@ -1107,6 +1960,47 @@ mod tests {
             assert_eq!(search_entries(&db, "Github Test").len(), 1);
             assert_eq!(search_entries(&db, "Duplicate Title").len(), 2);
         }
+    }
+
+    #[test]
+    fn vault_credentials_password_only_opens_generated_vault() {
+        let path = Path::new("../../test-vaults/generated/phase3-base.kdbx");
+        if path.exists() {
+            let credentials = VaultCredentials::password_only("testpass");
+            let db = open_database_with_credentials(path, &credentials).unwrap();
+            assert_eq!(db.iter_all_entries().count(), 4);
+        }
+    }
+
+    #[test]
+    fn vault_credentials_password_plus_key_file_opens_synthetic_vault() {
+        let dir = tempfile::tempdir().unwrap();
+        let key_file = dir.path().join("test.keyx");
+        std::fs::write(
+            &key_file,
+            b"<KeyFile><Key><Data>NXyYiJMHg3ls+eBmjbAjWec9lcOToJiofbhNiFMTJMw=</Data></Key></KeyFile>",
+        )
+        .unwrap();
+
+        let vault = dir.path().join("key-file-vault.kdbx");
+        let mut db = Database::new();
+        db.root_mut().edit(|root| root.name = "Root".to_string());
+        db.root_mut().add_entry().edit(|entry| {
+            entry.set_unprotected(fields::TITLE, "Key File Test");
+            entry.set_protected(fields::PASSWORD, "secret");
+        });
+
+        let mut key_reader = File::open(&key_file).unwrap();
+        let key = DatabaseKey::new()
+            .with_password("testpass")
+            .with_keyfile(&mut key_reader)
+            .unwrap();
+        let mut out = File::create(&vault).unwrap();
+        db.save(&mut out, key).unwrap();
+
+        let credentials = VaultCredentials::with_key_file("testpass", &key_file);
+        let reopened = open_database_with_credentials(&vault, &credentials).unwrap();
+        assert_eq!(reopened.iter_all_entries().count(), 1);
     }
 
     #[test]

@@ -27,6 +27,7 @@ dependencies = [
  "anyhow",
  "arboard",
  "clap",
+ "clap_complete",
  "directories",
  "rand",
  "rpassword",
@@ -43,6 +44,7 @@ version = "0.1.0"
 dependencies = [
  "keepass",
  "serde",
+ "serde_json",
  "tempfile",
  "thiserror 2.0.18",
  "uuid",
@@ -316,6 +318,15 @@ dependencies = [
  "anstyle",
  "clap_lex",
  "strsim",
+]
+
+[[package]]
+name = "clap_complete"
+version = "4.6.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e0a7a9bfdb35811f9e59832f0f05975114d2251b415fb534108e6f34060fd772"
+dependencies = [
+ "clap",
 ]
 
 [[package]]

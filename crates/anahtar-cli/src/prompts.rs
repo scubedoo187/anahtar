@@ -15,6 +15,20 @@ pub fn prompt_entry_password_with_confirmation() -> Result<String> {
     Ok(password)
 }
 
+pub fn confirm_group_delete(path: &str) -> Result<()> {
+    println!("Delete group and all nested entries/groups?");
+    println!("Group: {path}");
+    print!("Type DELETE GROUP to confirm: ");
+    std::io::stdout().flush()?;
+
+    let mut input = String::new();
+    std::io::stdin().read_line(&mut input)?;
+    if input.trim() != "DELETE GROUP" {
+        anyhow::bail!("group delete confirmation failed");
+    }
+    Ok(())
+}
+
 pub fn confirm_delete(detail: &EntryDetail) -> Result<()> {
     println!("Delete entry?");
     println!("ID: {}", detail.id);
