@@ -1,0 +1,11 @@
+[package]
+name = "anahtar-app"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+anahtar-core = { path = "../anahtar-core" }
+
+[dev-dependencies]
+tempfile.workspace = true

@@ -9,6 +9,7 @@ name = "anahtar"
 path = "src/main.rs"
 
 [dependencies]
+anahtar-app = { path = "../anahtar-app" }
 anahtar-core = { path = "../anahtar-core" }
 anyhow.workspace = true
 clap.workspace = true

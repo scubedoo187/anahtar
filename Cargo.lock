@@ -20,9 +20,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "anahtar-app"
+version = "0.1.0"
+dependencies = [
+ "anahtar-core",
+ "tempfile",
+]
+
+[[package]]
 name = "anahtar-cli"
 version = "0.1.0"
 dependencies = [
+ "anahtar-app",
  "anahtar-core",
  "anyhow",
  "arboard",

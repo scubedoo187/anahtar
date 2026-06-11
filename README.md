@@ -1,6 +1,6 @@
 # Anahtar
 
-Anahtar is a personal KeePass/KDBX CLI experiment. The current focus is a safe CLI-first workflow that can later be reused by a desktop GUI.
+Anahtar is a personal KeePass/KDBX-compatible password manager. The current productized surface is a Rust CLI; the next major phase is a macOS-first desktop GUI alpha built on the same core/app crates.
 
 ## Current status
 
@@ -10,13 +10,28 @@ Completed:
 - Phase 2: non-destructive KDBX4.1 `upgrade` / save-as flow
 - Phase 3: minimal write commands with save-as
 - Phase 4: daily-use CLI polish
-  - TOML config/default vault
-  - consistent `--vault` CLI shape
-  - clipboard copy
-  - password generation
-  - TOTP retrieval
+- Phase 5: CLI password-manager productization
+  - password-only and password + key-file unlock
+  - safe in-place writes with backup/temp/final verification
+  - explicit selectors
+  - group management and entry move
+  - non-secret audit reports
+  - shell completions and CI
+- Phase 5.5: UI-readiness cleanup in progress
 
-All write commands currently write a new KDBX4.1 output file and do **not** modify the input vault in place.
+Upcoming:
+
+- Phase 6: macOS-first GUI alpha
+
+Current limitations:
+
+- No browser extension.
+- No mobile app.
+- No sync engine.
+- No background unlock daemon.
+- Windows replacement semantics need dedicated validation before Windows-first use.
+
+When `--output` is omitted, write commands update the target vault in place using backup + temp save + reopen verification. Explicit `--output` keeps non-mutating save-as behavior.
 
 ## Safety model
 

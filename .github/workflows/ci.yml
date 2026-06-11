@@ -13,7 +13,17 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Format
         run: cargo fmt --all -- --check
+      - name: Generate synthetic test vault
+        run: cargo run -q -p anahtar-core --example generate_phase3_vault
       - name: Clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
       - name: Test
         run: cargo test --workspace
+      - name: Check examples
+        run: cargo check --workspace --examples
+      - name: Install smoke
+        run: |
+          tmp="$(mktemp -d)"
+          cargo install --path crates/anahtar-cli --root "$tmp" --quiet
+          "$tmp/bin/anahtar" --version
+          "$tmp/bin/anahtar" completions bash >/tmp/anahtar-completions.bash
