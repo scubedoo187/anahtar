@@ -5,6 +5,16 @@ export type AnahtarGuiError = {
   message: string;
 };
 
+export type RecentVault = {
+  path: string;
+  key_file?: string | null;
+};
+
+export type GuiConfig = {
+  last_vault_path?: string | null;
+  recent_vaults: RecentVault[];
+};
+
 export type BackendStatus = {
   app: string;
   version: string;
@@ -121,6 +131,21 @@ export type VaultRequest = {
 
 export function backendStatus(): Promise<BackendStatus> {
   return invoke<BackendStatus>("backend_status");
+}
+
+export function loadGuiConfig(): Promise<GuiConfig> {
+  return invoke<GuiConfig>("load_gui_config");
+}
+
+export function rememberVault(path: string, keyFile?: string | null): Promise<GuiConfig> {
+  return invoke<GuiConfig>("remember_vault", {
+    path,
+    keyFile: emptyToNull(keyFile),
+  });
+}
+
+export function clearRecentVaults(): Promise<GuiConfig> {
+  return invoke<GuiConfig>("clear_recent_vaults");
 }
 
 export function inspectVault(path: string): Promise<VaultInfo> {

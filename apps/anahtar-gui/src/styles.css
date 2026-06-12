@@ -316,7 +316,8 @@ button:disabled {
 }
 
 .entry-list,
-.group-tree {
+.group-tree,
+.recent-vaults {
   display: grid;
   gap: 0.6rem;
   max-height: min(34rem, calc(100vh - 23rem));
@@ -330,6 +331,7 @@ button:disabled {
 .entry-row,
 .group-row,
 .group-tree-row,
+.recent-vault-row,
 .audit-row {
   display: grid;
   gap: 0.25rem;
@@ -346,7 +348,8 @@ button:disabled {
 .entry-row:hover,
 .entry-row.selected,
 .group-tree-row:hover,
-.group-tree-row.selected {
+.group-tree-row.selected,
+.recent-vault-row:hover {
   color: #151515;
   background: #f1c27d;
 }
@@ -364,13 +367,26 @@ button:disabled {
 .entry-row span,
 .entry-row code,
 .group-row span,
-.group-tree-row span {
+.group-tree-row span,
+.recent-vault-row span {
   overflow: hidden;
   color: inherit;
   font-size: 0.8rem;
   opacity: 0.84;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.recent-vaults-section {
+  display: grid;
+  gap: 0.6rem;
+  border-top: 1px solid rgba(241, 194, 125, 0.14);
+  padding-top: 0.8rem;
+}
+
+.recent-vaults-section h2 {
+  margin: 0;
+  font-size: 1rem;
 }
 
 .audit-row {

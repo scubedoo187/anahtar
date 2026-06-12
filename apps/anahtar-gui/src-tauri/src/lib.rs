@@ -4,7 +4,7 @@ use anahtar_core::{
     GroupSummary, TotpCode, VaultCredentials, VaultInfo, WriteReport,
 };
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 type GuiResult<T> = Result<T, GuiError>;
 
@@ -19,6 +19,18 @@ struct BackendStatus {
     app: &'static str,
     version: &'static str,
     service: &'static str,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+struct GuiConfig {
+    last_vault_path: Option<String>,
+    recent_vaults: Vec<RecentVault>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+struct RecentVault {
+    path: String,
+    key_file: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -49,6 +61,40 @@ fn backend_status() -> BackendStatus {
         version: env!("CARGO_PKG_VERSION"),
         service: "anahtar-app ready",
     }
+}
+
+#[tauri::command]
+fn load_gui_config() -> GuiResult<GuiConfig> {
+    read_gui_config().map_err(|error| gui_error("config_failed", error))
+}
+
+#[tauri::command]
+fn remember_vault(path: String, key_file: Option<String>) -> GuiResult<GuiConfig> {
+    let mut config = read_gui_config().map_err(|error| gui_error("config_failed", error))?;
+    let path = path.trim().to_string();
+    if path.is_empty() {
+        return Err(gui_error("validation_failed", "vault path is required"));
+    }
+
+    config.last_vault_path = Some(path.clone());
+    config.recent_vaults.retain(|vault| vault.path != path);
+    config.recent_vaults.insert(
+        0,
+        RecentVault {
+            path,
+            key_file: key_file.filter(|value| !value.trim().is_empty()),
+        },
+    );
+    config.recent_vaults.truncate(5);
+    write_gui_config(&config).map_err(|error| gui_error("config_failed", error))?;
+    Ok(config)
+}
+
+#[tauri::command]
+fn clear_recent_vaults() -> GuiResult<GuiConfig> {
+    let config = GuiConfig::default();
+    write_gui_config(&config).map_err(|error| gui_error("config_failed", error))?;
+    Ok(config)
 }
 
 #[tauri::command]
@@ -372,12 +418,43 @@ fn gui_error(kind: &'static str, error: impl std::fmt::Display) -> GuiError {
     }
 }
 
+fn read_gui_config() -> std::io::Result<GuiConfig> {
+    let path = gui_config_path()?;
+    if !path.exists() {
+        return Ok(GuiConfig::default());
+    }
+    let contents = std::fs::read_to_string(path)?;
+    Ok(serde_json::from_str(&contents).unwrap_or_default())
+}
+
+fn write_gui_config(config: &GuiConfig) -> std::io::Result<()> {
+    let path = gui_config_path()?;
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let contents = serde_json::to_string_pretty(config)?;
+    std::fs::write(path, contents)
+}
+
+fn gui_config_path() -> std::io::Result<PathBuf> {
+    let home = std::env::var_os("HOME")
+        .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "HOME is not set"))?;
+    Ok(Path::new(&home)
+        .join("Library")
+        .join("Application Support")
+        .join("com.anahtar.alpha")
+        .join("gui-config.json"))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             backend_status,
+            load_gui_config,
+            remember_vault,
+            clear_recent_vaults,
             inspect_vault,
             unlock_vault,
             search_entries,

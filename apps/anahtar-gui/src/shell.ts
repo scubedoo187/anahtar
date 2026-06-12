@@ -34,6 +34,14 @@ export function renderShell(app: HTMLDivElement): void {
             <button id="unlock-vault" type="submit">Unlock</button>
           </div>
 
+          <section class="recent-vaults-section" aria-label="Recent vaults">
+            <div class="pane-header split-header">
+              <h2>Recent vaults</h2>
+              <button id="clear-recent-vaults" class="icon-button" type="button" title="Clear recent vaults" aria-label="Clear recent vaults">⌫</button>
+            </div>
+            <div id="recent-vaults" class="recent-vaults" aria-live="polite">No recent vaults.</div>
+          </section>
+
           <div id="auth-output" class="output compact" aria-live="polite">Ready to unlock.</div>
         </form>
       </section>
@@ -132,6 +140,19 @@ export function renderShell(app: HTMLDivElement): void {
             </section>
           </section>
         </main>
+
+        <div id="confirm-dialog" class="modal-backdrop" hidden>
+          <section class="modal-card confirm-card" role="dialog" aria-modal="true" aria-labelledby="confirm-dialog-title">
+            <div>
+              <h2 id="confirm-dialog-title">Confirm action</h2>
+              <p id="confirm-dialog-message" class="hint">Are you sure?</p>
+            </div>
+            <div class="session-actions">
+              <button id="confirm-dialog-confirm" class="danger-icon" type="button">Confirm</button>
+              <button id="confirm-dialog-cancel" type="button">Cancel</button>
+            </div>
+          </section>
+        </div>
 
         <div id="entry-dialog" class="modal-backdrop" hidden>
           <form id="entry-dialog-form" class="modal-card">

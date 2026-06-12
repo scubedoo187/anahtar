@@ -9,7 +9,10 @@ import {
   editEntry,
   inspectVault,
   listGroups,
+  loadGuiConfig,
   moveEntry,
+  rememberVault,
+  clearRecentVaults,
   renameGroup,
   searchEntries,
   showEntry,
@@ -18,6 +21,8 @@ import {
   versionLabel,
   type AddEntryRequest,
   type EditEntryRequest,
+  type GuiConfig,
+  type RecentVault,
   type VaultRequest,
 } from "./api";
 import { clearClipboardTimer, copyWithOwnedClear, setClipboardStatus } from "./clipboard";
@@ -54,9 +59,11 @@ if (!app) {
 
 const state = createInitialState();
 let entryDialogMode: "add" | "edit" | null = null;
+let pendingConfirm: ((confirmed: boolean) => void) | null = null;
 
 renderShell(app);
 setInputValue("#vault-path", defaultVaultPath);
+void initializeGuiConfig();
 void refreshBackendStatus();
 renderAppChrome();
 focusMasterPassword();
@@ -66,6 +73,7 @@ bindButton("#refresh-status", refreshBackendStatus);
 bindButton("#inspect-vault", runInspect);
 bindButton("#browse-vault", chooseVaultFile);
 bindButton("#browse-key-file", chooseKeyFile);
+bindButton("#clear-recent-vaults", clearRecentVaultList);
 bindForm("#unlock-form", runUnlock);
 bindButton("#lock-vault", lockVault);
 bindButton("#search-entries", runSearch);
@@ -76,6 +84,8 @@ bindButton("#edit-selected", openEditEntryDialog);
 bindButton("#entry-dialog-close", closeEntryDialog);
 bindButton("#entry-dialog-cancel", closeEntryDialog);
 bindForm("#entry-dialog-form", submitEntryDialog);
+bindButton("#confirm-dialog-confirm", async () => resolveConfirm(true));
+bindButton("#confirm-dialog-cancel", async () => resolveConfirm(false));
 bindButton("#add-group", runAddGroup);
 bindButton("#rename-group", runRenameGroup);
 bindButton("#delete-group", runDeleteGroup);
@@ -93,6 +103,72 @@ function bindNavigation(): void {
 function setActiveView(view: ActiveView): void {
   state.activeView = view;
   renderAppChrome();
+}
+
+async function initializeGuiConfig(): Promise<void> {
+  try {
+    const config = await loadGuiConfig();
+    applyGuiConfig(config);
+    authOutputEl().textContent = config.last_vault_path
+      ? "Recent vault loaded. Enter the master password to unlock."
+      : "Ready to unlock.";
+  } catch (error) {
+    authOutputEl().textContent = `Config error: ${formatError(error)}`;
+  } finally {
+    focusMasterPassword();
+  }
+}
+
+function applyGuiConfig(config: GuiConfig): void {
+  if (config.last_vault_path) {
+    setInputValue("#vault-path", config.last_vault_path);
+    const recent = config.recent_vaults.find((vault) => vault.path === config.last_vault_path);
+    setInputValue("#key-file", recent?.key_file ?? "");
+  }
+  renderRecentVaults(config.recent_vaults);
+}
+
+function renderRecentVaults(recentVaults: RecentVault[]): void {
+  const list = document.querySelector<HTMLDivElement>("#recent-vaults");
+  if (!list) return;
+  list.textContent = "";
+  if (recentVaults.length === 0) {
+    list.textContent = "No recent vaults.";
+    return;
+  }
+
+  for (const vault of recentVaults) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "recent-vault-row";
+    button.title = vault.path;
+    button.addEventListener("click", () => {
+      setInputValue("#vault-path", vault.path);
+      setInputValue("#key-file", vault.key_file ?? "");
+      authOutputEl().textContent = "Recent vault selected. Enter the master password to unlock.";
+      focusMasterPassword();
+    });
+
+    const name = document.createElement("strong");
+    name.textContent = basename(vault.path);
+    const path = document.createElement("span");
+    path.textContent = vault.path;
+    button.append(name, path);
+    list.append(button);
+  }
+}
+
+async function clearRecentVaultList(): Promise<void> {
+  try {
+    const config = await clearRecentVaults();
+    applyGuiConfig(config);
+    setInputValue("#vault-path", defaultVaultPath);
+    setInputValue("#key-file", "");
+    authOutputEl().textContent = "Recent vaults cleared.";
+    focusMasterPassword();
+  } catch (error) {
+    authOutputEl().textContent = `Config error: ${formatError(error)}`;
+  }
 }
 
 async function chooseVaultFile(): Promise<void> {
@@ -171,6 +247,8 @@ async function runUnlock(): Promise<void> {
     state.selectedGroupPath = null;
     state.activeView = "browse";
     clearSelection(state);
+    const config = await rememberVault(request.path, request.keyFile);
+    renderRecentVaults(config.recent_vaults);
     clearPasswordInput();
     renderAppChrome();
     renderGroupTree(state, state.groups, selectGroup);
@@ -316,6 +394,29 @@ function promptValue(label: string, defaultValue: string): string | null {
   return window.prompt(label, defaultValue);
 }
 
+function confirmAction(title: string, message: string): Promise<boolean> {
+  const dialog = document.querySelector<HTMLElement>("#confirm-dialog");
+  const titleEl = document.querySelector<HTMLHeadingElement>("#confirm-dialog-title");
+  const messageEl = document.querySelector<HTMLParagraphElement>("#confirm-dialog-message");
+  if (!dialog || !titleEl || !messageEl) {
+    return Promise.resolve(false);
+  }
+  titleEl.textContent = title;
+  messageEl.textContent = message;
+  dialog.hidden = false;
+  document.querySelector<HTMLButtonElement>("#confirm-dialog-cancel")?.focus();
+  return new Promise((resolve) => {
+    pendingConfirm = resolve;
+  });
+}
+
+function resolveConfirm(confirmed: boolean): void {
+  const dialog = document.querySelector<HTMLElement>("#confirm-dialog");
+  if (dialog) dialog.hidden = true;
+  pendingConfirm?.(confirmed);
+  pendingConfirm = null;
+}
+
 function showEntryDialog(): void {
   const dialog = document.querySelector<HTMLElement>("#entry-dialog");
   if (dialog) dialog.hidden = false;
@@ -396,7 +497,7 @@ async function runDeleteGroup(): Promise<void> {
     if (count > 0) {
       throw new Error(`cannot delete group with ${count} entries in it or its child groups`);
     }
-    if (!window.confirm(`Delete empty group "${groupPath}"?`)) {
+    if (!(await confirmAction("Delete group", `Delete empty group "${groupPath}"? This cannot be undone.`))) {
       return "Delete group cancelled.";
     }
     const report = await deleteGroup(session, groupPath);
@@ -513,10 +614,7 @@ async function runDeleteEntry(): Promise<void> {
       throw new Error("select an entry first");
     }
     const detailTitle = state.selectedDetail?.title ?? state.selectedEntryId;
-    const confirmed = window.confirm(
-      `Delete "${detailTitle}"? A backup will be created before the vault is replaced.`,
-    );
-    if (!confirmed) {
+    if (!(await confirmAction("Delete entry", `Delete "${detailTitle}"? A backup will be created before the vault is replaced.`))) {
       return "Delete cancelled.";
     }
     const report = await deleteEntry(session, state.selectedEntryId, null);
@@ -581,6 +679,10 @@ function focusMasterPassword(): void {
 
 function vaultPath(): string {
   return inputValue("#vault-path");
+}
+
+function basename(path: string): string {
+  return path.split(/[\\/]/).filter(Boolean).pop() ?? path;
 }
 
 window.addEventListener("unhandledrejection", (event: PromiseRejectionEvent) => {
