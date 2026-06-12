@@ -113,7 +113,7 @@ async function initializeGuiConfig(): Promise<void> {
       ? "Recent vault loaded. Enter the master password to unlock."
       : "Ready to unlock.";
   } catch (error) {
-    authOutputEl().textContent = `Config error: ${formatError(error)}`;
+    authOutputEl().textContent = formatError(error);
   } finally {
     focusMasterPassword();
   }
@@ -167,7 +167,7 @@ async function clearRecentVaultList(): Promise<void> {
     authOutputEl().textContent = "Recent vaults cleared.";
     focusMasterPassword();
   } catch (error) {
-    authOutputEl().textContent = `Config error: ${formatError(error)}`;
+    authOutputEl().textContent = formatError(error);
   }
 }
 
@@ -184,7 +184,7 @@ async function chooseVaultFile(): Promise<void> {
       focusMasterPassword();
     }
   } catch (error) {
-    authOutputEl().textContent = `File picker error: ${formatError(error)}`;
+    authOutputEl().textContent = formatError(error);
   }
 }
 
@@ -201,7 +201,7 @@ async function chooseKeyFile(): Promise<void> {
       focusMasterPassword();
     }
   } catch (error) {
-    authOutputEl().textContent = `File picker error: ${formatError(error)}`;
+    authOutputEl().textContent = formatError(error);
   }
 }
 
@@ -218,7 +218,7 @@ async function refreshBackendStatus(): Promise<void> {
     const status = await backendStatus();
     statusEl.textContent = `${status.app} ${status.version} — ${status.service}`;
   } catch (error) {
-    statusEl.textContent = `Backend unavailable: ${formatError(error)}`;
+    statusEl.textContent = `Backend unavailable. ${formatError(error)}`;
   }
 }
 
@@ -449,7 +449,7 @@ async function loadSelectedDetail(revealPassword: boolean): Promise<void> {
     renderEntryDetail(detail, revealPassword, detailActions());
     renderAppChrome();
   } catch (error) {
-    detailEl.textContent = `Error: ${formatError(error)}`;
+    detailEl.textContent = formatError(error);
   }
 }
 
@@ -556,7 +556,7 @@ async function submitEntryDialog(): Promise<void> {
   try {
     output.textContent = await saveEntryDialog();
   } catch (error) {
-    output.textContent = `Error: ${formatError(error)}`;
+    output.textContent = formatError(error);
   }
 }
 
@@ -629,7 +629,7 @@ async function renderAuthAction(action: () => Promise<string>): Promise<void> {
   try {
     output.textContent = await action();
   } catch (error) {
-    output.textContent = `Error: ${formatError(error)}`;
+    output.textContent = formatError(error);
   }
 }
 
@@ -639,7 +639,7 @@ async function renderCommand(action: () => Promise<string>): Promise<void> {
   try {
     output.textContent = await action();
   } catch (error) {
-    output.textContent = `Error: ${formatError(error)}`;
+    output.textContent = formatError(error);
   }
 }
 
@@ -649,7 +649,7 @@ async function renderWriteAction(action: () => Promise<string>): Promise<void> {
   try {
     output.textContent = await action();
   } catch (error) {
-    output.textContent = `Error: ${formatError(error)}`;
+    output.textContent = formatError(error);
   }
 }
 
