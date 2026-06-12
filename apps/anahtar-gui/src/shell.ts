@@ -154,6 +154,24 @@ export function renderShell(app: HTMLDivElement): void {
           </section>
         </div>
 
+        <div id="group-dialog" class="modal-backdrop" hidden>
+          <form id="group-dialog-form" class="modal-card">
+            <div class="pane-header split-header">
+              <div>
+                <h2 id="group-dialog-title">Group</h2>
+                <p id="group-dialog-hint" class="hint">Enter a group path.</p>
+              </div>
+              <button id="group-dialog-close" class="icon-button" type="button" title="Close" aria-label="Close">×</button>
+            </div>
+            <label><span id="group-dialog-label">Group path</span><input id="group-dialog-value" type="text" required /></label>
+            <div id="group-dialog-output" class="output compact" aria-live="polite">Ready.</div>
+            <div class="session-actions">
+              <button id="group-dialog-submit" type="submit">Save</button>
+              <button id="group-dialog-cancel" type="button">Cancel</button>
+            </div>
+          </form>
+        </div>
+
         <div id="entry-dialog" class="modal-backdrop" hidden>
           <form id="entry-dialog-form" class="modal-card">
             <div class="pane-header split-header">

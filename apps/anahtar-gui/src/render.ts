@@ -61,7 +61,6 @@ export function renderSessionState(state: AppState): void {
   setDisabled("#add-group", !unlocked);
   setDisabled("#rename-group", !unlocked || !state.selectedGroupPath);
   setDisabled("#delete-group", !unlocked || !state.selectedGroupPath);
-  setDisabled("#delete-entry", !unlocked || !state.selectedEntryId);
   setDisabled("#run-audit", !unlocked);
 
   const status = document.querySelector<HTMLDivElement>("#session-status");

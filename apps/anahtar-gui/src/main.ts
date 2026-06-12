@@ -59,6 +59,7 @@ if (!app) {
 
 const state = createInitialState();
 let entryDialogMode: "add" | "edit" | null = null;
+let groupDialogMode: "add" | "rename" | null = null;
 let pendingConfirm: ((confirmed: boolean) => void) | null = null;
 
 renderShell(app);
@@ -86,8 +87,11 @@ bindButton("#entry-dialog-cancel", closeEntryDialog);
 bindForm("#entry-dialog-form", submitEntryDialog);
 bindButton("#confirm-dialog-confirm", async () => resolveConfirm(true));
 bindButton("#confirm-dialog-cancel", async () => resolveConfirm(false));
-bindButton("#add-group", runAddGroup);
-bindButton("#rename-group", runRenameGroup);
+bindButton("#add-group", openAddGroupDialog);
+bindButton("#rename-group", openRenameGroupDialog);
+bindButton("#group-dialog-close", closeGroupDialog);
+bindButton("#group-dialog-cancel", closeGroupDialog);
+bindForm("#group-dialog-form", submitGroupDialog);
 bindButton("#delete-group", runDeleteGroup);
 bindButton("#run-audit", runAudit);
 bindButton("#delete-entry", runDeleteEntry);
@@ -390,10 +394,6 @@ function entryInGroup(entryGroupPath: string, groupPath: string): boolean {
   return entryPath === selected || entryPath.startsWith(`${selected}/`);
 }
 
-function promptValue(label: string, defaultValue: string): string | null {
-  return window.prompt(label, defaultValue);
-}
-
 function confirmAction(title: string, message: string): Promise<boolean> {
   const dialog = document.querySelector<HTMLElement>("#confirm-dialog");
   const titleEl = document.querySelector<HTMLHeadingElement>("#confirm-dialog-title");
@@ -415,6 +415,27 @@ function resolveConfirm(confirmed: boolean): void {
   if (dialog) dialog.hidden = true;
   pendingConfirm?.(confirmed);
   pendingConfirm = null;
+}
+
+function showGroupDialog(): void {
+  const dialog = document.querySelector<HTMLElement>("#group-dialog");
+  if (dialog) dialog.hidden = false;
+  document.querySelector<HTMLInputElement>("#group-dialog-value")?.focus();
+}
+
+function setGroupDialogText(title: string, hint: string, label: string): void {
+  const titleEl = document.querySelector<HTMLHeadingElement>("#group-dialog-title");
+  const hintEl = document.querySelector<HTMLParagraphElement>("#group-dialog-hint");
+  const labelEl = document.querySelector<HTMLSpanElement>("#group-dialog-label");
+  if (titleEl) titleEl.textContent = title;
+  if (hintEl) hintEl.textContent = hint;
+  if (labelEl) labelEl.textContent = label;
+}
+
+function groupDialogOutputEl(): HTMLDivElement {
+  const output = document.querySelector<HTMLDivElement>("#group-dialog-output");
+  if (!output) throw new Error("group dialog output element missing");
+  return output;
 }
 
 function showEntryDialog(): void {
@@ -453,39 +474,71 @@ async function loadSelectedDetail(revealPassword: boolean): Promise<void> {
   }
 }
 
-async function runAddGroup(): Promise<void> {
-  await renderWriteAction(async () => {
-    const session = requireSession(state);
-    const base = state.selectedGroupPath ? `${state.selectedGroupPath}/` : "";
-    const groupPath = promptValue("New group path", base);
-    if (groupPath === null) return "Add group cancelled.";
-    if (!groupPath.trim()) throw new Error("group path is required");
-    const report = await addGroup(session, groupPath.trim());
-    await refreshEntriesAfterWrite(null);
-    state.selectedGroupPath = groupPath.trim();
-    renderGroupTree(state, state.groups, selectGroup);
-    renderEntryList(state, filteredEntries(), selectEntry);
-    return renderWriteReport(report);
-  });
+async function openAddGroupDialog(): Promise<void> {
+  requireSession(state);
+  groupDialogMode = "add";
+  setGroupDialogText("New group", "Enter the full path for the new group.", "Group path");
+  setInputValue("#group-dialog-value", state.selectedGroupPath ? `${state.selectedGroupPath}/` : "");
+  groupDialogOutputEl().textContent = "Ready.";
+  showGroupDialog();
 }
 
-async function runRenameGroup(): Promise<void> {
-  await renderWriteAction(async () => {
-    const session = requireSession(state);
-    if (!state.selectedGroupPath) throw new Error("select a group first");
-    const currentName = state.selectedGroupPath.split("/").pop() ?? state.selectedGroupPath;
-    const newName = promptValue("New group name", currentName);
-    if (newName === null) return "Rename group cancelled.";
-    if (!newName.trim()) throw new Error("new group name is required");
-    const oldPath = state.selectedGroupPath;
-    const report = await renameGroup(session, oldPath, newName.trim());
+async function openRenameGroupDialog(): Promise<void> {
+  requireSession(state);
+  if (!state.selectedGroupPath) throw new Error("select a group first");
+  groupDialogMode = "rename";
+  setGroupDialogText("Rename group", `Renaming ${state.selectedGroupPath}.`, "New name");
+  setInputValue("#group-dialog-value", state.selectedGroupPath.split("/").pop() ?? state.selectedGroupPath);
+  groupDialogOutputEl().textContent = "Ready.";
+  showGroupDialog();
+}
+
+async function closeGroupDialog(): Promise<void> {
+  groupDialogMode = null;
+  const dialog = document.querySelector<HTMLElement>("#group-dialog");
+  if (dialog) dialog.hidden = true;
+}
+
+async function submitGroupDialog(): Promise<void> {
+  const output = groupDialogOutputEl();
+  output.textContent = "Saving…";
+  try {
+    output.textContent = await saveGroupDialog();
+  } catch (error) {
+    output.textContent = formatError(error);
+  }
+}
+
+async function saveGroupDialog(): Promise<string> {
+  const session = requireSession(state);
+  const value = inputValue("#group-dialog-value").trim();
+
+  if (groupDialogMode === "add") {
+    if (!value) throw new Error("group path is required");
+    const report = await addGroup(session, value);
+    await closeGroupDialog();
     await refreshEntriesAfterWrite(null);
-    const parent = oldPath.split("/").slice(0, -1).join("/");
-    state.selectedGroupPath = parent ? `${parent}/${newName.trim()}` : newName.trim();
+    state.selectedGroupPath = value;
     renderGroupTree(state, state.groups, selectGroup);
     renderEntryList(state, filteredEntries(), selectEntry);
     return renderWriteReport(report);
-  });
+  }
+
+  if (groupDialogMode === "rename") {
+    if (!state.selectedGroupPath) throw new Error("select a group first");
+    if (!value) throw new Error("new group name is required");
+    const oldPath = state.selectedGroupPath;
+    const report = await renameGroup(session, oldPath, value);
+    await closeGroupDialog();
+    await refreshEntriesAfterWrite(null);
+    const parent = oldPath.split("/").slice(0, -1).join("/");
+    state.selectedGroupPath = parent ? `${parent}/${value}` : value;
+    renderGroupTree(state, state.groups, selectGroup);
+    renderEntryList(state, filteredEntries(), selectEntry);
+    return renderWriteReport(report);
+  }
+
+  throw new Error("group dialog is not open");
 }
 
 async function runDeleteGroup(): Promise<void> {
