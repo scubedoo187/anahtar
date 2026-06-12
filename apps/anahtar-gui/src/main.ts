@@ -320,7 +320,7 @@ async function reloadSafeDetail(): Promise<void> {
 }
 
 async function revealSelectedDetail(): Promise<void> {
-  await loadSelectedDetail(true);
+  await loadSelectedDetail(!state.detailRevealed);
 }
 
 async function copySelectedUsername(): Promise<void> {

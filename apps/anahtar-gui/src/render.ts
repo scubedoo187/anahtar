@@ -167,7 +167,7 @@ export function renderEntryDetail(
     detailLine("Username", detail.username ?? "", [fieldButton("⧉", "Copy username", actions.copyUsername, !detail.username)]),
     detailLine("Password", revealPassword ? (detail.password ?? "") : "<hidden>", [
       fieldButton("⧉", "Copy password", actions.copyPassword, false),
-      fieldButton("👁", "Reveal password", actions.revealPassword, revealPassword),
+      fieldButton(revealPassword ? "🙈" : "👁", revealPassword ? "Hide password" : "Reveal password", actions.revealPassword, false),
     ]),
     detailLine("URL", detail.url ?? "", [fieldButton("⧉", "Copy URL", actions.copyUrl, !detail.url)]),
     detailLine("TOTP", detail.has_totp ? "one-time code available" : "No TOTP code available", [
