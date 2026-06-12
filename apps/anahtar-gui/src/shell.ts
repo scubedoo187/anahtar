@@ -1,4 +1,4 @@
-export const defaultVaultPath = "../../../test-vaults/generated/phase3-base.kdbx";
+export const defaultVaultPath = "";
 
 export function renderShell(app: HTMLDivElement): void {
   // Static shell only: do not interpolate vault, entry, or secret data into this template.
@@ -20,7 +20,7 @@ export function renderShell(app: HTMLDivElement): void {
           <label>
             Key-file path <span class="muted">optional</span>
             <span class="path-picker-row">
-              <input id="key-file" type="text" spellcheck="false" placeholder="/path/to/key-file.keyx" />
+              <input id="key-file" type="text" spellcheck="false" />
               <button id="browse-key-file" class="icon-button" type="button" title="Choose key file" aria-label="Choose key file">…</button>
             </span>
           </label>
@@ -86,7 +86,7 @@ export function renderShell(app: HTMLDivElement): void {
               </div>
               <label>
                 Search query
-                <input id="search-query" type="search" value="Github" disabled />
+                <input id="search-query" type="search" disabled />
               </label>
               <div class="button-row compact-actions">
                 <button id="search-entries" type="button" disabled>Search</button>
