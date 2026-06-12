@@ -455,7 +455,8 @@ fn read_gui_config(app: &tauri::AppHandle) -> std::io::Result<GuiConfig> {
         return Ok(GuiConfig::default());
     }
     let contents = std::fs::read_to_string(path)?;
-    Ok(serde_json::from_str(&contents).unwrap_or_default())
+    serde_json::from_str(&contents)
+        .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidData, error))
 }
 
 fn write_gui_config(app: &tauri::AppHandle, config: &GuiConfig) -> std::io::Result<()> {
