@@ -52,6 +52,9 @@ struct GuiEditEntryRequest {
     password: Option<String>,
     url: Option<String>,
     notes: Option<String>,
+    clear_username: Option<bool>,
+    clear_url: Option<bool>,
+    clear_notes: Option<bool>,
     backup_dir: Option<String>,
 }
 
@@ -221,10 +224,10 @@ fn edit_entry(
         &entry_id,
         EditEntryRequest {
             title: empty_to_none(request.title),
-            username: empty_to_none(request.username),
+            username: text_field_update(request.username, request.clear_username),
             password: empty_secret_to_none(request.password),
-            url: empty_to_none(request.url),
-            notes: empty_to_none(request.notes),
+            url: text_field_update(request.url, request.clear_url),
+            notes: text_field_update(request.notes, request.clear_notes),
         },
         WriteMode::InPlace { backup_dir },
     )
@@ -429,6 +432,14 @@ fn empty_secret_to_none(value: Option<String>) -> Option<String> {
     value.and_then(|value| (!value.is_empty()).then_some(value))
 }
 
+fn text_field_update(value: Option<String>, clear: Option<bool>) -> Option<String> {
+    if clear.unwrap_or(false) {
+        Some(String::new())
+    } else {
+        empty_to_none(value)
+    }
+}
+
 fn entry_is_in_group(entry_group_path: &str, group_path: &str) -> bool {
     let entry = normalize_group_path(entry_group_path);
     let group = normalize_group_path(group_path);
@@ -624,6 +635,9 @@ mod tests {
                 password: None,
                 url: None,
                 notes: None,
+                clear_username: None,
+                clear_url: None,
+                clear_notes: None,
                 backup_dir: Some(backup_dir.clone()),
             },
         )

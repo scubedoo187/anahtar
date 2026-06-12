@@ -22,7 +22,6 @@ import {
   type AddEntryRequest,
   type EditEntryRequest,
   type GuiConfig,
-  type RecentVault,
   type VaultRequest,
 } from "./api";
 import { clearClipboardTimer, copyWithOwnedClear, setClipboardStatus } from "./clipboard";
@@ -47,6 +46,7 @@ import {
   renderSessionState,
   renderWriteReport,
 } from "./render";
+import { renderRecentVaults } from "./recent-vaults";
 import { createInitialState, clearSelection, requireSelectedDetail, requireSession, type ActiveView } from "./state";
 import { defaultVaultPath, renderShell } from "./shell";
 import "./styles.css";
@@ -129,37 +129,14 @@ function applyGuiConfig(config: GuiConfig): void {
     const recent = config.recent_vaults.find((vault) => vault.path === config.last_vault_path);
     setInputValue("#key-file", recent?.key_file ?? "");
   }
-  renderRecentVaults(config.recent_vaults);
+  renderRecentVaults(config.recent_vaults, selectRecentVault);
 }
 
-function renderRecentVaults(recentVaults: RecentVault[]): void {
-  const list = document.querySelector<HTMLDivElement>("#recent-vaults");
-  if (!list) return;
-  list.textContent = "";
-  if (recentVaults.length === 0) {
-    list.textContent = "No recent vaults.";
-    return;
-  }
-
-  for (const vault of recentVaults) {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "recent-vault-row";
-    button.title = vault.path;
-    button.addEventListener("click", () => {
-      setInputValue("#vault-path", vault.path);
-      setInputValue("#key-file", vault.key_file ?? "");
-      authOutputEl().textContent = "Recent vault selected. Enter the master password to unlock.";
-      focusMasterPassword();
-    });
-
-    const name = document.createElement("strong");
-    name.textContent = basename(vault.path);
-    const path = document.createElement("span");
-    path.textContent = vault.path;
-    button.append(name, path);
-    list.append(button);
-  }
+function selectRecentVault(vault: { path: string; key_file?: string | null }): void {
+  setInputValue("#vault-path", vault.path);
+  setInputValue("#key-file", vault.key_file ?? "");
+  authOutputEl().textContent = "Recent vault selected. Enter the master password to unlock.";
+  focusMasterPassword();
 }
 
 async function clearRecentVaultList(): Promise<void> {
@@ -252,7 +229,7 @@ async function runUnlock(): Promise<void> {
     state.activeView = "browse";
     clearSelection(state);
     const config = await rememberVault(request.path, request.keyFile);
-    renderRecentVaults(config.recent_vaults);
+    renderRecentVaults(config.recent_vaults, selectRecentVault);
     clearPasswordInput();
     renderAppChrome();
     renderGroupTree(state, state.groups, selectGroup);
@@ -575,9 +552,12 @@ async function openAddEntryDialog(): Promise<void> {
   setInputValue("#dialog-group", state.selectedGroupPath ?? "General/Web");
   setInputValue("#dialog-title", "");
   setInputValue("#dialog-username", "");
+  setChecked("#dialog-clear-username", false);
   setInputValue("#dialog-password", "");
   setInputValue("#dialog-url", "");
+  setChecked("#dialog-clear-url", false);
   setInputValue("#dialog-notes", "");
+  setChecked("#dialog-clear-notes", false);
   entryDialogOutputEl().textContent = "Ready.";
   showEntryDialog();
 }
@@ -590,9 +570,12 @@ async function openEditEntryDialog(): Promise<void> {
   setInputValue("#dialog-group", detail.group_path);
   setInputValue("#dialog-title", detail.title ?? "");
   setInputValue("#dialog-username", detail.username ?? "");
+  setChecked("#dialog-clear-username", false);
   setInputValue("#dialog-password", "");
   setInputValue("#dialog-url", detail.url ?? "");
+  setChecked("#dialog-clear-url", false);
   setInputValue("#dialog-notes", detail.notes ?? "");
+  setChecked("#dialog-clear-notes", false);
   entryDialogOutputEl().textContent = "Leave password blank to keep the current password.";
   showEntryDialog();
 }
@@ -646,6 +629,9 @@ async function saveEntryDialog(): Promise<string> {
       password: inputValue("#dialog-password"),
       url: inputValue("#dialog-url"),
       notes: inputValue("#dialog-notes"),
+      clear_username: inputChecked("#dialog-clear-username"),
+      clear_url: inputChecked("#dialog-clear-url"),
+      clear_notes: inputChecked("#dialog-clear-notes"),
       backup_dir: null,
     };
     let report = await editEntry(session, state.selectedEntryId, request);
@@ -700,10 +686,25 @@ async function renderWriteAction(action: () => Promise<string>): Promise<void> {
   const output = outputEl();
   output.textContent = "Running write action…";
   try {
-    output.textContent = await action();
+    const result = await action();
+    output.textContent = result;
+    setActionStatus(writeSuccessMessage(result));
   } catch (error) {
     output.textContent = formatError(error);
+    setActionStatus(formatError(error));
   }
+}
+
+function writeSuccessMessage(result: string): string {
+  if (result.includes("Backup: ") && !result.includes("Backup: \n")) {
+    return "Saved. Backup created.";
+  }
+  return "Saved.";
+}
+
+function setActionStatus(message: string): void {
+  const status = document.querySelector<HTMLDivElement>("#action-status");
+  if (status) status.textContent = message;
 }
 
 function formVaultRequest(): VaultRequest {
@@ -716,6 +717,15 @@ function formVaultRequest(): VaultRequest {
 
 function clearPasswordInput(): void {
   setInputValue("#master-password", "");
+}
+
+function setChecked(selector: string, checked: boolean): void {
+  const input = document.querySelector<HTMLInputElement>(selector);
+  if (input) input.checked = checked;
+}
+
+function inputChecked(selector: string): boolean {
+  return document.querySelector<HTMLInputElement>(selector)?.checked ?? false;
 }
 
 function authOutputEl(): HTMLDivElement {
@@ -732,10 +742,6 @@ function focusMasterPassword(): void {
 
 function vaultPath(): string {
   return inputValue("#vault-path");
-}
-
-function basename(path: string): string {
-  return path.split(/[\\/]/).filter(Boolean).pop() ?? path;
 }
 
 window.addEventListener("unhandledrejection", (event: PromiseRejectionEvent) => {

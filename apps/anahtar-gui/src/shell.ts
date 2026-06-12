@@ -48,8 +48,9 @@ export function renderShell(app: HTMLDivElement): void {
 
       <section id="app-frame" class="app-frame" aria-label="Anahtar workspace" hidden>
         <header class="workspace-topbar">
-          <div>
+          <div class="topbar-status-stack">
             <div id="session-status" class="status locked">Locked</div>
+            <div id="action-status" class="status neutral compact-status">Ready.</div>
           </div>
           <div class="topbar-actions">
             <button id="nav-browse" class="icon-button" type="button" data-view="browse" aria-selected="true" title="Browse" aria-label="Browse">⌂</button>
@@ -184,9 +185,12 @@ export function renderShell(app: HTMLDivElement): void {
             <label>Group path <input id="dialog-group" type="text" required /></label>
             <label>Title <input id="dialog-title" type="text" required /></label>
             <label>Username <input id="dialog-username" type="text" /></label>
+            <label class="checkbox-label"><input id="dialog-clear-username" type="checkbox" /> Clear username</label>
             <label>Password <input id="dialog-password" type="password" autocomplete="new-password" /></label>
             <label>URL <input id="dialog-url" type="url" /></label>
+            <label class="checkbox-label"><input id="dialog-clear-url" type="checkbox" /> Clear URL</label>
             <label>Notes <input id="dialog-notes" type="text" /></label>
+            <label class="checkbox-label"><input id="dialog-clear-notes" type="checkbox" /> Clear notes</label>
             <div id="entry-dialog-output" class="output compact" aria-live="polite">Ready.</div>
             <div class="session-actions">
               <button id="entry-dialog-submit" type="submit">Save</button>

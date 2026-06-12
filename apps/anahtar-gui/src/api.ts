@@ -118,6 +118,9 @@ export type EditEntryRequest = {
   password?: string | null;
   url?: string | null;
   notes?: string | null;
+  clear_username?: boolean;
+  clear_url?: boolean;
+  clear_notes?: boolean;
   backup_dir?: string | null;
 };
 
@@ -340,10 +343,13 @@ function normalizeAddRequest(entry: AddEntryRequest): AddEntryRequest {
 function normalizeEditRequest(entry: EditEntryRequest): EditEntryRequest {
   return {
     title: emptyToNull(entry.title),
-    username: emptyToNull(entry.username),
+    username: entry.clear_username ? "" : emptyToNull(entry.username),
     password: emptySecretToNull(entry.password),
-    url: emptyToNull(entry.url),
-    notes: emptyToNull(entry.notes),
+    url: entry.clear_url ? "" : emptyToNull(entry.url),
+    notes: entry.clear_notes ? "" : emptyToNull(entry.notes),
+    clear_username: entry.clear_username,
+    clear_url: entry.clear_url,
+    clear_notes: entry.clear_notes,
     backup_dir: emptyToNull(entry.backup_dir),
   };
 }
