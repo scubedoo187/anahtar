@@ -87,7 +87,7 @@ export function renderGroupTree(
     return;
   }
 
-  list.append(groupTreeButton("All Entries", null, state.selectedGroupPath === null, 0, onSelect));
+  list.append(groupTreeButton("All Entries", null, state.selectedGroupPath === null, 0, onSelect, state.activeEntries.length));
 
   if (groups.length === 0) {
     const empty = document.createElement("p");
@@ -108,10 +108,8 @@ export function renderGroupTree(
       state.selectedGroupPath === normalizedPath,
       depth,
       onSelect,
+      countEntriesInGroup(state.activeEntries, normalizedPath),
     );
-    const meta = document.createElement("span");
-    meta.textContent = `${group.entry_count} entries`;
-    button.append(meta);
     list.append(button);
   }
 }
@@ -257,6 +255,10 @@ function entryMatchesGroup(entry: EntrySummary, selectedGroupPath: string | null
   return entryPath === selectedGroupPath || entryPath.startsWith(`${selectedGroupPath}/`);
 }
 
+function countEntriesInGroup(entries: EntrySummary[], groupPath: string): number {
+  return entries.filter((entry) => entryMatchesGroup(entry, groupPath)).length;
+}
+
 export function filterEntriesForSelectedGroup(state: AppState, entries: EntrySummary[]): EntrySummary[] {
   return entries.filter((entry) => entryMatchesGroup(entry, state.selectedGroupPath));
 }
@@ -267,6 +269,7 @@ function groupTreeButton(
   selected: boolean,
   depth: number,
   onSelect: GroupSelectHandler,
+  entryCount: number,
 ): HTMLButtonElement {
   const button = document.createElement("button");
   button.type = "button";
@@ -276,7 +279,9 @@ function groupTreeButton(
 
   const title = document.createElement("strong");
   title.textContent = label;
-  button.append(title);
+  const meta = document.createElement("span");
+  meta.textContent = `${entryCount} ${entryCount === 1 ? "entry" : "entries"}`;
+  button.append(title, meta);
   return button;
 }
 
