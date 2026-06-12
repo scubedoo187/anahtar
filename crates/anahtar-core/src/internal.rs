@@ -156,6 +156,7 @@ pub struct EntryDetail {
     pub username: Option<String>,
     pub url: Option<String>,
     pub notes: Option<String>,
+    pub has_totp: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub password: Option<String>,
     pub custom_fields: Vec<CustomField>,
@@ -1435,6 +1436,7 @@ fn detail_from_entry(
         username: entry.get_username().map(ToOwned::to_owned),
         url: entry.get_url().map(ToOwned::to_owned),
         notes: entry.get(fields::NOTES).map(ToOwned::to_owned),
+        has_totp: entry.get_otp().is_ok(),
         password: reveal_password
             .then(|| entry.get_password().map(ToOwned::to_owned))
             .flatten(),

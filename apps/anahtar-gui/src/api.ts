@@ -47,6 +47,7 @@ export type CustomField = {
 
 export type EntryDetail = EntrySummary & {
   notes?: string | null;
+  has_totp: boolean;
   password?: string | null;
   custom_fields: CustomField[];
 };

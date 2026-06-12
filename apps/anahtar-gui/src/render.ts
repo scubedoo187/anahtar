@@ -170,7 +170,9 @@ export function renderEntryDetail(
       fieldButton("👁", "Reveal password", actions.revealPassword, revealPassword),
     ]),
     detailLine("URL", detail.url ?? "", [fieldButton("⧉", "Copy URL", actions.copyUrl, !detail.url)]),
-    detailLine("TOTP", "one-time code", [fieldButton("⧉", "Copy TOTP code", actions.copyTotp, false)]),
+    detailLine("TOTP", detail.has_totp ? "one-time code available" : "No TOTP code available", [
+      fieldButton("⧉", "Copy TOTP code", actions.copyTotp, !detail.has_totp),
+    ]),
     detailLine("Notes", detail.notes ?? ""),
     detailLine("Sensitive fields", revealPassword ? "revealed by explicit action" : "hidden"),
   );
