@@ -1,11 +1,15 @@
 import {
   addEntry,
+  addGroup,
   auditVault,
   backendStatus,
   deleteEntry,
+  deleteGroup,
   editEntry,
   inspectVault,
   listGroups,
+  moveEntry,
+  renameGroup,
   searchEntries,
   showEntry,
   totpCode,
@@ -18,18 +22,17 @@ import {
 import { clearClipboardTimer, copyWithOwnedClear, setClipboardStatus } from "./clipboard";
 import {
   bindButton,
-  bindForm,
   detailOutputEl,
   inputValue,
   outputEl,
   setInputValue,
-  writeReportEl,
 } from "./dom";
 import { errorMessage, formatError } from "./errors";
 import {
   renderAudit,
   renderEmptyDetail,
   filterEntriesForSelectedGroup,
+  normalizeGroupPath,
   renderEntryDetail,
   renderEntryList,
   renderGroupTree,
@@ -62,13 +65,16 @@ bindButton("#lock-vault", lockVault);
 bindButton("#search-entries", runSearch);
 bindButton("#reset-list", resetList);
 bindButton("#reload-detail", reloadSafeDetail);
+bindButton("#new-entry", runAddEntry);
+bindButton("#edit-selected", runEditEntry);
+bindButton("#add-group", runAddGroup);
+bindButton("#rename-group", runRenameGroup);
+bindButton("#delete-group", runDeleteGroup);
 bindButton("#run-audit", runAudit);
-bindForm("#add-entry-form", runAddEntry);
-bindForm("#edit-entry-form", runEditEntry);
 bindButton("#delete-entry", runDeleteEntry);
 
 function bindNavigation(): void {
-  for (const view of ["browse", "audit", "write", "status"] as ActiveView[]) {
+  for (const view of ["browse", "audit", "status"] as ActiveView[]) {
     bindButton(`#nav-${view}`, async () => {
       setActiveView(view);
     });
@@ -166,7 +172,6 @@ async function lockVault(): Promise<void> {
   renderEmptyDetail("Select an entry to view details.");
   renderAudit(state, null);
   setClipboardStatus("Clipboard idle.", "neutral");
-  writeReportEl().textContent = "No write action run yet.";
   outputEl().textContent = "Locked. In-memory session cleared.";
 }
 
@@ -258,6 +263,16 @@ function filteredEntries() {
   return filterEntriesForSelectedGroup(state, state.visibleEntries);
 }
 
+function entryInGroup(entryGroupPath: string, groupPath: string): boolean {
+  const entryPath = normalizeGroupPath(entryGroupPath);
+  const selected = normalizeGroupPath(groupPath);
+  return entryPath === selected || entryPath.startsWith(`${selected}/`);
+}
+
+function promptValue(label: string, defaultValue: string): string | null {
+  return window.prompt(label, defaultValue);
+}
+
 async function loadSelectedDetail(revealPassword: boolean): Promise<void> {
   const session = requireSession(state);
   if (!state.selectedEntryId) {
@@ -277,6 +292,60 @@ async function loadSelectedDetail(revealPassword: boolean): Promise<void> {
   }
 }
 
+async function runAddGroup(): Promise<void> {
+  await renderWriteAction(async () => {
+    const session = requireSession(state);
+    const base = state.selectedGroupPath ? `${state.selectedGroupPath}/` : "";
+    const groupPath = promptValue("New group path", base);
+    if (groupPath === null) return "Add group cancelled.";
+    if (!groupPath.trim()) throw new Error("group path is required");
+    const report = await addGroup(session, groupPath.trim());
+    await refreshEntriesAfterWrite(null);
+    state.selectedGroupPath = groupPath.trim();
+    renderGroupTree(state, state.groups, selectGroup);
+    renderEntryList(state, filteredEntries(), selectEntry);
+    return renderWriteReport(report);
+  });
+}
+
+async function runRenameGroup(): Promise<void> {
+  await renderWriteAction(async () => {
+    const session = requireSession(state);
+    if (!state.selectedGroupPath) throw new Error("select a group first");
+    const currentName = state.selectedGroupPath.split("/").pop() ?? state.selectedGroupPath;
+    const newName = promptValue("New group name", currentName);
+    if (newName === null) return "Rename group cancelled.";
+    if (!newName.trim()) throw new Error("new group name is required");
+    const oldPath = state.selectedGroupPath;
+    const report = await renameGroup(session, oldPath, newName.trim());
+    await refreshEntriesAfterWrite(null);
+    const parent = oldPath.split("/").slice(0, -1).join("/");
+    state.selectedGroupPath = parent ? `${parent}/${newName.trim()}` : newName.trim();
+    renderGroupTree(state, state.groups, selectGroup);
+    renderEntryList(state, filteredEntries(), selectEntry);
+    return renderWriteReport(report);
+  });
+}
+
+async function runDeleteGroup(): Promise<void> {
+  await renderWriteAction(async () => {
+    const session = requireSession(state);
+    const groupPath = state.selectedGroupPath;
+    if (!groupPath) throw new Error("select a group first");
+    const count = state.activeEntries.filter((entry) => entryInGroup(entry.group_path, groupPath)).length;
+    if (count > 0) {
+      throw new Error(`cannot delete group with ${count} entries in it or its child groups`);
+    }
+    if (!window.confirm(`Delete empty group "${groupPath}"?`)) {
+      return "Delete group cancelled.";
+    }
+    const report = await deleteGroup(session, groupPath);
+    state.selectedGroupPath = null;
+    await refreshEntriesAfterWrite(null);
+    return renderWriteReport(report);
+  });
+}
+
 async function runAudit(): Promise<void> {
   await renderCommand(async () => {
     const report = await auditVault(requireSession(state));
@@ -288,20 +357,32 @@ async function runAudit(): Promise<void> {
 async function runAddEntry(): Promise<void> {
   await renderWriteAction(async () => {
     const session = requireSession(state);
+    const groupPath = promptValue("Group path", state.selectedGroupPath ?? "General/Web");
+    if (groupPath === null) return "Add entry cancelled.";
+    const title = promptValue("Title", "");
+    if (title === null) return "Add entry cancelled.";
+    const username = promptValue("Username", "");
+    if (username === null) return "Add entry cancelled.";
+    const password = promptValue("Password", "");
+    if (password === null) return "Add entry cancelled.";
+    const url = promptValue("URL", "");
+    if (url === null) return "Add entry cancelled.";
+    const notes = promptValue("Notes", "");
+    if (notes === null) return "Add entry cancelled.";
+
     const request: AddEntryRequest = {
-      group_path: inputValue("#add-group"),
-      title: inputValue("#add-title"),
-      username: inputValue("#add-username"),
-      password: inputValue("#add-password"),
-      url: inputValue("#add-url"),
-      notes: inputValue("#add-notes"),
-      backup_dir: inputValue("#backup-dir"),
+      group_path: groupPath,
+      title,
+      username,
+      password,
+      url,
+      notes,
+      backup_dir: null,
     };
     if (!request.group_path.trim() || !request.title.trim()) {
       throw new Error("group path and title are required");
     }
     const report = await addEntry(session, request);
-    clearWritePasswordInputs();
     await refreshEntriesAfterWrite(report.changed_entry_id);
     return renderWriteReport(report);
   });
@@ -310,22 +391,29 @@ async function runAddEntry(): Promise<void> {
 async function runEditEntry(): Promise<void> {
   await renderWriteAction(async () => {
     const session = requireSession(state);
+    const detail = requireSelectedDetail(state);
     if (!state.selectedEntryId) {
       throw new Error("select an entry first");
     }
-    const request: EditEntryRequest = {
-      title: inputValue("#edit-title"),
-      username: inputValue("#edit-username"),
-      password: inputValue("#edit-password"),
-      url: inputValue("#edit-url"),
-      notes: inputValue("#edit-notes"),
-      backup_dir: inputValue("#backup-dir"),
-    };
-    if (!hasEditChange(request)) {
-      throw new Error("provide at least one edit field");
+
+    const groupPath = promptValue("Group path", detail.group_path);
+    if (groupPath === null) return "Edit entry cancelled.";
+    const title = promptValue("Title", detail.title ?? "");
+    if (title === null) return "Edit entry cancelled.";
+    const username = promptValue("Username", detail.username ?? "");
+    if (username === null) return "Edit entry cancelled.";
+    const password = promptValue("Password (leave blank to keep current password)", "");
+    if (password === null) return "Edit entry cancelled.";
+    const url = promptValue("URL", detail.url ?? "");
+    if (url === null) return "Edit entry cancelled.";
+    const notes = promptValue("Notes", detail.notes ?? "");
+    if (notes === null) return "Edit entry cancelled.";
+
+    const request: EditEntryRequest = { title, username, password, url, notes, backup_dir: null };
+    let report = await editEntry(session, state.selectedEntryId, request);
+    if (groupPath.trim() && groupPath.trim() !== detail.group_path) {
+      report = await moveEntry(session, state.selectedEntryId, groupPath.trim());
     }
-    const report = await editEntry(session, state.selectedEntryId, request);
-    clearEditInputs();
     await refreshEntriesAfterWrite(report.changed_entry_id ?? state.selectedEntryId);
     return renderWriteReport(report);
   });
@@ -344,7 +432,7 @@ async function runDeleteEntry(): Promise<void> {
     if (!confirmed) {
       return "Delete cancelled.";
     }
-    const report = await deleteEntry(session, state.selectedEntryId, inputValue("#backup-dir"));
+    const report = await deleteEntry(session, state.selectedEntryId, null);
     await refreshEntriesAfterWrite(null);
     return renderWriteReport(report);
   });
@@ -361,7 +449,7 @@ async function renderCommand(action: () => Promise<string>): Promise<void> {
 }
 
 async function renderWriteAction(action: () => Promise<string>): Promise<void> {
-  const output = writeReportEl();
+  const output = outputEl();
   output.textContent = "Running write action…";
   try {
     output.textContent = await action();
@@ -376,24 +464,6 @@ function formVaultRequest(): VaultRequest {
     password: inputValue("#master-password"),
     keyFile: inputValue("#key-file"),
   };
-}
-
-function hasEditChange(request: EditEntryRequest): boolean {
-  return [request.title, request.username, request.password, request.url, request.notes].some(
-    (value) => (value ?? "").trim().length > 0,
-  );
-}
-
-function clearEditInputs(): void {
-  for (const selector of ["#edit-title", "#edit-username", "#edit-password", "#edit-url", "#edit-notes"]) {
-    setInputValue(selector, "");
-  }
-}
-
-function clearWritePasswordInputs(): void {
-  for (const selector of ["#add-password", "#edit-password"]) {
-    setInputValue(selector, "");
-  }
 }
 
 function clearPasswordInput(): void {

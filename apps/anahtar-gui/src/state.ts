@@ -1,6 +1,6 @@
 import type { EntryDetail, EntrySummary, GroupSummary, VaultRequest } from "./api";
 
-export type ActiveView = "browse" | "audit" | "write" | "status";
+export type ActiveView = "browse" | "audit" | "status";
 
 export type AppState = {
   activeView: ActiveView;

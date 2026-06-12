@@ -19,7 +19,7 @@ export type DetailActionHandlers = {
   revealPassword: () => Promise<void>;
 };
 
-const activeViews: ActiveView[] = ["browse", "audit", "write", "status"];
+const activeViews: ActiveView[] = ["browse", "audit", "status"];
 
 export function renderNavigationState(state: AppState): void {
   for (const view of activeViews) {
@@ -55,20 +55,12 @@ export function renderSessionState(state: AppState): void {
   setDisabled("#search-entries", !unlocked);
   setDisabled("#reset-list", !unlocked);
   setDisabled("#reload-detail", !unlocked || !state.selectedEntryId);
-  setDisabled("#backup-dir", !unlocked);
+  setDisabled("#new-entry", !unlocked);
+  setDisabled("#edit-selected", !unlocked || !state.selectedEntryId);
+  setDisabled("#delete-entry", !unlocked || !state.selectedEntryId);
   setDisabled("#add-group", !unlocked);
-  setDisabled("#add-title", !unlocked);
-  setDisabled("#add-username", !unlocked);
-  setDisabled("#add-password", !unlocked);
-  setDisabled("#add-url", !unlocked);
-  setDisabled("#add-notes", !unlocked);
-  setDisabled("#add-entry", !unlocked);
-  setDisabled("#edit-title", !unlocked || !state.selectedEntryId);
-  setDisabled("#edit-username", !unlocked || !state.selectedEntryId);
-  setDisabled("#edit-password", !unlocked || !state.selectedEntryId);
-  setDisabled("#edit-url", !unlocked || !state.selectedEntryId);
-  setDisabled("#edit-notes", !unlocked || !state.selectedEntryId);
-  setDisabled("#edit-entry", !unlocked || !state.selectedEntryId);
+  setDisabled("#rename-group", !unlocked || !state.selectedGroupPath);
+  setDisabled("#delete-group", !unlocked || !state.selectedGroupPath);
   setDisabled("#delete-entry", !unlocked || !state.selectedEntryId);
   setDisabled("#run-audit", !unlocked);
 

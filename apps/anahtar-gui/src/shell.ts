@@ -35,41 +35,38 @@ export function renderShell(app: HTMLDivElement): void {
           <div>
             <div id="session-status" class="status locked">Locked</div>
           </div>
-          <button id="lock-vault" type="button" disabled>Lock</button>
+          <div class="topbar-actions">
+            <button id="nav-browse" type="button" data-view="browse" aria-selected="true">Browse</button>
+            <button id="nav-audit" type="button" data-view="audit" aria-selected="false">Audit</button>
+            <button id="nav-status" type="button" data-view="status" aria-selected="false">Status</button>
+            <button id="lock-vault" type="button" disabled>Lock</button>
+          </div>
         </header>
-
-        <aside class="sidebar" aria-label="Navigation">
-          <div class="sidebar-group">
-            <p class="sidebar-heading">Vault</p>
-            <button id="nav-browse" class="nav-button" type="button" data-view="browse" aria-selected="true">Browse</button>
-          </div>
-
-          <div class="sidebar-group">
-            <p class="sidebar-heading">Tools</p>
-            <button id="nav-audit" class="nav-button" type="button" data-view="audit" aria-selected="false">Audit</button>
-            <button id="nav-write" class="nav-button" type="button" data-view="write" aria-selected="false">Write</button>
-            <button id="nav-status" class="nav-button" type="button" data-view="status" aria-selected="false">Status</button>
-          </div>
-        </aside>
 
         <main class="workspace" aria-live="polite">
           <section id="view-panel-browse" class="view-panel browse-layout" data-view-panel="browse">
             <section class="pane groups-pane">
-              <div class="pane-header">
+              <div class="pane-header split-header">
                 <div>
                   <h2>Groups</h2>
                   <p class="hint">Select a group to filter entries.</p>
+                </div>
+                <div class="mini-actions">
+                  <button id="add-group" type="button" disabled>+</button>
+                  <button id="rename-group" type="button" disabled>Rename</button>
+                  <button id="delete-group" type="button" disabled>Delete</button>
                 </div>
               </div>
               <div id="group-list" class="group-tree" aria-live="polite">Unlock first to inspect groups.</div>
             </section>
 
             <section class="pane list-pane">
-              <div class="pane-header">
+              <div class="pane-header split-header">
                 <div>
                   <h2>Entries</h2>
                   <p class="hint">Search and select an entry. Detail lookup uses the selected UUID.</p>
                 </div>
+                <button id="new-entry" type="button" disabled>+ New</button>
               </div>
               <label>
                 Search query
@@ -83,14 +80,16 @@ export function renderShell(app: HTMLDivElement): void {
             </section>
 
             <section class="pane detail-pane">
-              <div class="pane-header">
+              <div class="pane-header split-header">
                 <div>
                   <h2>Entry detail</h2>
                   <p class="hint">Passwords and protected fields are hidden by default.</p>
                 </div>
-              </div>
-              <div class="button-row compact-actions">
-                <button id="reload-detail" type="button" disabled>Reload safe detail</button>
+                <div class="mini-actions">
+                  <button id="reload-detail" type="button" disabled>Reload</button>
+                  <button id="edit-selected" type="button" disabled>Edit</button>
+                  <button id="delete-entry" type="button" disabled>Delete</button>
+                </div>
               </div>
               <div id="clipboard-status" class="status neutral">Clipboard idle.</div>
               <div id="entry-detail" class="detail-output" aria-live="polite">Select an entry to view details.</div>
@@ -107,53 +106,6 @@ export function renderShell(app: HTMLDivElement): void {
                 <button id="run-audit" type="button" disabled>Run audit</button>
               </div>
               <div id="audit-findings" class="detail-output" aria-live="polite">Unlock first to run audit.</div>
-            </section>
-          </section>
-
-          <section id="view-panel-write" class="view-panel tool-layout" data-view-panel="write" hidden>
-            <section class="pane command-surface">
-              <div class="pane-header">
-                <div>
-                  <h2>Write actions</h2>
-                  <p class="hint">Write actions update the unlocked vault in place and display the backup path. Test on generated-vault copies first.</p>
-                </div>
-              </div>
-
-              <label>
-                Backup directory <span class="muted">optional</span>
-                <input id="backup-dir" type="text" spellcheck="false" placeholder="defaults to sibling anahtar-backups/" disabled />
-              </label>
-
-              <div class="write-grid">
-                <form id="add-entry-form" class="write-form">
-                  <h3>Add entry</h3>
-                  <label>Group path <input id="add-group" type="text" value="General/Web" disabled /></label>
-                  <label>Title <input id="add-title" type="text" value="GUI Added Entry" disabled /></label>
-                  <label>Username <input id="add-username" type="text" value="gui-user" disabled /></label>
-                  <label>Password <input id="add-password" type="password" autocomplete="new-password" disabled /></label>
-                  <label>URL <input id="add-url" type="url" value="https://gui.example.com" disabled /></label>
-                  <label>Notes <input id="add-notes" type="text" value="Added from Anahtar GUI" disabled /></label>
-                  <button id="add-entry" type="submit" disabled>Add entry</button>
-                </form>
-
-                <form id="edit-entry-form" class="write-form">
-                  <h3>Edit selected entry</h3>
-                  <label>Title <input id="edit-title" type="text" placeholder="leave blank to keep" disabled /></label>
-                  <label>Username <input id="edit-username" type="text" placeholder="leave blank to keep" disabled /></label>
-                  <label>Password <input id="edit-password" type="password" autocomplete="new-password" placeholder="leave blank to keep" disabled /></label>
-                  <label>URL <input id="edit-url" type="url" placeholder="leave blank to keep" disabled /></label>
-                  <label>Notes <input id="edit-notes" type="text" placeholder="leave blank to keep" disabled /></label>
-                  <button id="edit-entry" type="submit" disabled>Edit selected</button>
-                </form>
-              </div>
-
-              <div class="danger-zone">
-                <h3>Delete selected entry</h3>
-                <p class="hint">Requires confirmation. A backup is created before the vault is replaced.</p>
-                <button id="delete-entry" type="button" disabled>Delete selected entry</button>
-              </div>
-
-              <div id="write-report" class="output compact" aria-live="polite">No write action run yet.</div>
             </section>
           </section>
 

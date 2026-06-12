@@ -212,6 +212,114 @@ fn delete_entry(
     })
 }
 
+#[tauri::command]
+fn add_group(
+    path: String,
+    password: String,
+    key_file: Option<String>,
+    group_path: String,
+    backup_dir: Option<String>,
+) -> GuiResult<WriteReport> {
+    let credentials = credentials_from_gui(password, key_file);
+    AnahtarService::add_group(
+        &path,
+        &credentials,
+        &group_path,
+        WriteMode::InPlace {
+            backup_dir: optional_path(backup_dir),
+        },
+    )
+    .map_err(|error| gui_error("write_failed", error))?
+    .ok_or_else(|| {
+        gui_error(
+            "internal_failed",
+            "add group dry-run returned no write report",
+        )
+    })
+}
+
+#[tauri::command]
+fn rename_group(
+    path: String,
+    password: String,
+    key_file: Option<String>,
+    group_path: String,
+    new_name: String,
+    backup_dir: Option<String>,
+) -> GuiResult<WriteReport> {
+    let credentials = credentials_from_gui(password, key_file);
+    AnahtarService::rename_group(
+        &path,
+        &credentials,
+        &group_path,
+        &new_name,
+        WriteMode::InPlace {
+            backup_dir: optional_path(backup_dir),
+        },
+    )
+    .map_err(|error| gui_error("write_failed", error))?
+    .ok_or_else(|| {
+        gui_error(
+            "internal_failed",
+            "rename group dry-run returned no write report",
+        )
+    })
+}
+
+#[tauri::command]
+fn delete_group(
+    path: String,
+    password: String,
+    key_file: Option<String>,
+    group_path: String,
+    backup_dir: Option<String>,
+) -> GuiResult<WriteReport> {
+    let credentials = credentials_from_gui(password, key_file);
+    AnahtarService::delete_group(
+        &path,
+        &credentials,
+        &group_path,
+        WriteMode::InPlace {
+            backup_dir: optional_path(backup_dir),
+        },
+    )
+    .map_err(|error| gui_error("write_failed", error))?
+    .ok_or_else(|| {
+        gui_error(
+            "internal_failed",
+            "delete group dry-run returned no write report",
+        )
+    })
+}
+
+#[tauri::command]
+fn move_entry(
+    path: String,
+    password: String,
+    key_file: Option<String>,
+    entry_id: String,
+    group_path: String,
+    backup_dir: Option<String>,
+) -> GuiResult<WriteReport> {
+    let credentials = credentials_from_gui(password, key_file);
+    AnahtarService::move_entry(
+        &path,
+        &credentials,
+        &EntrySelector::Id(entry_id),
+        &group_path,
+        WriteMode::InPlace {
+            backup_dir: optional_path(backup_dir),
+        },
+    )
+    .map_err(|error| gui_error("write_failed", error))?
+    .ok_or_else(|| {
+        gui_error(
+            "internal_failed",
+            "move entry dry-run returned no write report",
+        )
+    })
+}
+
 fn credentials_from_gui(password: String, key_file: Option<String>) -> VaultCredentials {
     VaultCredentials {
         password,
@@ -278,7 +386,11 @@ pub fn run() {
             audit_vault,
             add_entry,
             edit_entry,
-            delete_entry
+            delete_entry,
+            add_group,
+            rename_group,
+            delete_group,
+            move_entry
         ])
         .run(tauri::generate_context!())
         .expect("failed to run Anahtar GUI");

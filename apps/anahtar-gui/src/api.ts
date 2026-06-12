@@ -233,6 +233,66 @@ export function deleteEntry(
   });
 }
 
+export function addGroup(
+  request: VaultRequest,
+  groupPath: string,
+  backupDir?: string | null,
+): Promise<WriteReport> {
+  return invoke<WriteReport>("add_group", {
+    path: request.path,
+    password: request.password,
+    keyFile: emptyToNull(request.keyFile),
+    groupPath,
+    backupDir: emptyToNull(backupDir),
+  });
+}
+
+export function renameGroup(
+  request: VaultRequest,
+  groupPath: string,
+  newName: string,
+  backupDir?: string | null,
+): Promise<WriteReport> {
+  return invoke<WriteReport>("rename_group", {
+    path: request.path,
+    password: request.password,
+    keyFile: emptyToNull(request.keyFile),
+    groupPath,
+    newName,
+    backupDir: emptyToNull(backupDir),
+  });
+}
+
+export function deleteGroup(
+  request: VaultRequest,
+  groupPath: string,
+  backupDir?: string | null,
+): Promise<WriteReport> {
+  return invoke<WriteReport>("delete_group", {
+    path: request.path,
+    password: request.password,
+    keyFile: emptyToNull(request.keyFile),
+    groupPath,
+    backupDir: emptyToNull(backupDir),
+  });
+}
+
+export function moveEntry(
+  request: VaultRequest,
+  entryId: string,
+  groupPath: string,
+  backupDir?: string | null,
+): Promise<WriteReport> {
+  return invoke<WriteReport>("move_entry", {
+    path: request.path,
+    password: request.password,
+    keyFile: emptyToNull(request.keyFile),
+    entryId,
+    groupPath,
+    backupDir: emptyToNull(backupDir),
+  });
+}
+
 export function versionLabel(version: KdbxVersion): string {
   if ("kdbx" in version) {
     return `KDBX ${version.kdbx.major}.${version.kdbx.minor}`;
