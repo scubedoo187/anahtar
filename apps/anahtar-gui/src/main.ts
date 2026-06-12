@@ -235,7 +235,7 @@ async function runUnlock(): Promise<void> {
     renderGroupTree(state, state.groups, selectGroup);
     renderEntryList(state, filteredEntries(), selectEntry);
     renderEmptyDetail("Select an entry to view details.");
-    return `Unlocked ${entries.length} entries. Select an entry from the list to view safe details.`;
+    return unlockMessage(request.path, entries.length);
   });
 }
 
@@ -493,12 +493,15 @@ async function saveGroupDialog(): Promise<string> {
   if (groupDialogMode === "add") {
     if (!value) throw new Error("group path is required");
     const report = await addGroup(session, value);
+    const reportText = renderWriteReport(report);
     await closeGroupDialog();
     await refreshEntriesAfterWrite(null);
     state.selectedGroupPath = value;
     renderGroupTree(state, state.groups, selectGroup);
     renderEntryList(state, filteredEntries(), selectEntry);
-    return renderWriteReport(report);
+    outputEl().textContent = reportText;
+    setActionStatus(writeSuccessMessage(reportText));
+    return reportText;
   }
 
   if (groupDialogMode === "rename") {
@@ -506,13 +509,16 @@ async function saveGroupDialog(): Promise<string> {
     if (!value) throw new Error("new group name is required");
     const oldPath = state.selectedGroupPath;
     const report = await renameGroup(session, oldPath, value);
+    const reportText = renderWriteReport(report);
     await closeGroupDialog();
     await refreshEntriesAfterWrite(null);
     const parent = oldPath.split("/").slice(0, -1).join("/");
     state.selectedGroupPath = parent ? `${parent}/${value}` : value;
     renderGroupTree(state, state.groups, selectGroup);
     renderEntryList(state, filteredEntries(), selectEntry);
-    return renderWriteReport(report);
+    outputEl().textContent = reportText;
+    setActionStatus(writeSuccessMessage(reportText));
+    return reportText;
   }
 
   throw new Error("group dialog is not open");
@@ -612,9 +618,12 @@ async function saveEntryDialog(): Promise<string> {
       throw new Error("group path and title are required");
     }
     const report = await addEntry(session, request);
+    const reportText = renderWriteReport(report);
     await closeEntryDialog();
     await refreshEntriesAfterWrite(report.changed_entry_id);
-    return renderWriteReport(report);
+    outputEl().textContent = reportText;
+    setActionStatus(writeSuccessMessage(reportText));
+    return reportText;
   }
 
   if (entryDialogMode === "edit") {
@@ -638,9 +647,12 @@ async function saveEntryDialog(): Promise<string> {
     if (groupPath && groupPath !== detail.group_path) {
       report = await moveEntry(session, state.selectedEntryId, groupPath);
     }
+    const reportText = renderWriteReport(report);
     await closeEntryDialog();
     await refreshEntriesAfterWrite(report.changed_entry_id ?? state.selectedEntryId);
-    return renderWriteReport(report);
+    outputEl().textContent = reportText;
+    setActionStatus(writeSuccessMessage(reportText));
+    return reportText;
   }
 
   throw new Error("entry dialog is not open");
@@ -696,10 +708,27 @@ async function renderWriteAction(action: () => Promise<string>): Promise<void> {
 }
 
 function writeSuccessMessage(result: string): string {
+  const target = result
+    .split("\n")
+    .find((line) => line.startsWith("Final target: "))
+    ?.replace("Final target: ", "");
+  const suffix = target ? ` Saved to ${target}.` : "";
   if (result.includes("Backup: ") && !result.includes("Backup: \n")) {
-    return "Saved. Backup created.";
+    return `Saved. Backup created.${suffix}`;
   }
-  return "Saved.";
+  return `Saved.${suffix}`;
+}
+
+function unlockMessage(path: string, entryCount: number): string {
+  const base = `Unlocked ${entryCount} entries. Select an entry from the list to view safe details.`;
+  if (isGeneratedTestVault(path)) {
+    return `${base} This is the generated test vault; developer verification can regenerate it, so use a copied vault for persistent write testing.`;
+  }
+  return base;
+}
+
+function isGeneratedTestVault(path: string): boolean {
+  return path.replace(/\\/g, "/").endsWith("test-vaults/generated/phase3-base.kdbx");
 }
 
 function setActionStatus(message: string): void {
