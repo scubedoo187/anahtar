@@ -44,71 +44,44 @@ input:focus-visible {
   padding: 1rem 0;
 }
 
-.desktop-shell {
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  gap: 1rem;
+[hidden] {
+  display: none !important;
 }
 
-.session-bar,
+.desktop-shell {
+  display: grid;
+  align-items: center;
+}
+
+.auth-screen {
+  display: grid;
+  min-height: calc(100vh - 2rem);
+  place-items: center;
+}
+
+.auth-card,
 .app-frame,
 .pane,
-.sidebar {
+.sidebar,
+.workspace-topbar {
   border: 1px solid rgba(241, 194, 125, 0.16);
   background: rgba(255, 255, 255, 0.06);
   box-shadow: 0 1.5rem 4rem rgba(0, 0, 0, 0.22);
   backdrop-filter: blur(18px);
 }
 
-.session-bar {
+.auth-card {
   display: grid;
-  grid-template-columns: minmax(16rem, 0.8fr) minmax(30rem, 1.8fr);
   gap: 1rem;
-  align-items: stretch;
+  width: min(34rem, 100%);
   border-radius: 1.1rem;
-  padding: 1rem;
-}
-
-.brand-block {
-  display: grid;
-  align-content: center;
-  gap: 0.35rem;
-  padding: 0.25rem;
-}
-
-.eyebrow {
-  margin: 0;
-  color: #f1c27d;
-  font-size: 0.76rem;
-  font-weight: 900;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
+  padding: 1.5rem;
 }
 
 h1 {
   margin: 0;
-  font-size: clamp(2rem, 4vw, 3.6rem);
+  font-size: clamp(2rem, 5vw, 3.4rem);
   line-height: 0.95;
-}
-
-.subtitle {
-  max-width: 34rem;
-  margin: 0;
-  color: #c8bfb4;
-  font-size: 0.98rem;
-}
-
-.unlock-strip {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 0.8rem;
-  align-items: end;
-}
-
-.unlock-fields {
-  display: grid;
-  grid-template-columns: minmax(16rem, 1.35fr) minmax(13rem, 1fr) minmax(12rem, 0.9fr);
-  gap: 0.75rem;
 }
 
 .session-actions {
@@ -116,17 +89,29 @@ h1 {
   gap: 0.65rem;
 }
 
-#session-status {
-  grid-column: 1 / -1;
-}
-
 .app-frame {
   display: grid;
   grid-template-columns: 13.5rem minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
   gap: 0;
-  min-height: calc(100vh - 13rem);
+  min-height: calc(100vh - 2rem);
   overflow: hidden;
   border-radius: 1.1rem;
+}
+
+.workspace-topbar {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 1rem;
+  align-items: center;
+  border-width: 0 0 1px;
+  padding: 0.8rem 1rem;
+  box-shadow: none;
+}
+
+#session-status {
+  width: fit-content;
 }
 
 .sidebar {
@@ -398,16 +383,13 @@ button:disabled {
 }
 
 @media (max-width: 1080px) {
-  .session-bar,
-  .unlock-strip,
-  .unlock-fields,
   .browse-layout {
     grid-template-columns: 1fr;
   }
 
   .session-actions {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: 1fr;
   }
 }
 

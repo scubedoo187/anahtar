@@ -32,6 +32,15 @@ export function renderNavigationState(state: AppState): void {
 
 export function renderSessionState(state: AppState): void {
   const unlocked = state.activeSession !== null;
+  const authScreen = document.querySelector<HTMLElement>("#auth-screen");
+  const appFrame = document.querySelector<HTMLElement>("#app-frame");
+  if (authScreen) {
+    authScreen.hidden = unlocked;
+  }
+  if (appFrame) {
+    appFrame.hidden = !unlocked;
+  }
+
   setDisabled("#lock-vault", !unlocked);
   setDisabled("#vault-path", unlocked);
   setDisabled("#key-file", unlocked);
@@ -66,7 +75,7 @@ export function renderSessionState(state: AppState): void {
   if (!status) return;
   if (unlocked) {
     status.className = "status unlocked";
-    status.textContent = `Unlocked: ${state.activeEntries.length} entries loaded. Password is held in memory only.`;
+    status.textContent = `Unlocked · ${state.activeEntries.length} entries loaded · ${vaultName(state.activeSession?.path)}`;
   } else {
     status.className = "status locked";
     status.textContent = "Locked";
@@ -218,6 +227,13 @@ export function renderWriteReport(report: WriteReport): string {
     `Backup: ${report.backup_path ?? ""}`,
     `Final target: ${report.final_target_path ?? ""}`,
   ].join("\n");
+}
+
+function vaultName(path?: string): string {
+  if (!path) {
+    return "vault";
+  }
+  return path.split(/[\\/]/).filter(Boolean).pop() ?? path;
 }
 
 export function detailLine(label: string, value: string): HTMLDivElement {

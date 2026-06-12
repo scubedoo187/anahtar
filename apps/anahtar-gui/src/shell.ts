@@ -4,41 +4,40 @@ export function renderShell(app: HTMLDivElement): void {
   // Static shell only: do not interpolate vault, entry, or secret data into this template.
   app.innerHTML = `
     <section class="shell desktop-shell">
-      <header class="session-bar">
-        <div class="brand-block">
-          <p class="eyebrow">Anahtar GUI Alpha</p>
-          <h1>Anahtar</h1>
-          <p class="subtitle">macOS-first KeePass/KDBX password manager GUI.</p>
-        </div>
+      <section id="auth-screen" class="auth-screen" aria-label="Unlock vault">
+        <section class="auth-card">
+          <h1>Unlock vault</h1>
+          <p class="hint">Choose a KDBX vault and enter its master password for this in-memory session.</p>
 
-        <section class="unlock-strip" aria-label="Unlock vault">
-          <div class="unlock-fields">
-            <label>
-              Vault path
-              <input id="vault-path" type="text" spellcheck="false" />
-            </label>
+          <label>
+            Vault path
+            <input id="vault-path" type="text" spellcheck="false" />
+          </label>
 
-            <label>
-              Key-file path <span class="muted">optional</span>
-              <input id="key-file" type="text" spellcheck="false" placeholder="/path/to/key-file.keyx" />
-            </label>
+          <label>
+            Key-file path <span class="muted">optional</span>
+            <input id="key-file" type="text" spellcheck="false" placeholder="/path/to/key-file.keyx" />
+          </label>
 
-            <label>
-              Master password
-              <input id="master-password" type="password" autocomplete="off" />
-            </label>
-          </div>
+          <label>
+            Master password
+            <input id="master-password" type="password" autocomplete="off" />
+          </label>
 
           <div class="session-actions">
-            <button id="unlock-vault" type="button">Unlock/List</button>
-            <button id="lock-vault" type="button" disabled>Lock</button>
+            <button id="unlock-vault" type="button">Unlock</button>
           </div>
-
-          <div id="session-status" class="status locked">Locked</div>
         </section>
-      </header>
+      </section>
 
-      <section class="app-frame" aria-label="Anahtar workspace">
+      <section id="app-frame" class="app-frame" aria-label="Anahtar workspace" hidden>
+        <header class="workspace-topbar">
+          <div>
+            <div id="session-status" class="status locked">Locked</div>
+          </div>
+          <button id="lock-vault" type="button" disabled>Lock</button>
+        </header>
+
         <aside class="sidebar" aria-label="Navigation">
           <div class="sidebar-group">
             <p class="sidebar-heading">Vault</p>
@@ -127,7 +126,7 @@ export function renderShell(app: HTMLDivElement): void {
               <div class="pane-header">
                 <div>
                   <h2>Write actions</h2>
-                  <p class="hint">Alpha write actions update the unlocked vault in place through anahtar-app and display the backup path. Test on generated-vault copies only.</p>
+                  <p class="hint">Write actions update the unlocked vault in place and display the backup path. Test on generated-vault copies first.</p>
                 </div>
               </div>
 
@@ -144,7 +143,7 @@ export function renderShell(app: HTMLDivElement): void {
                   <label>Username <input id="add-username" type="text" value="gui-user" disabled /></label>
                   <label>Password <input id="add-password" type="password" autocomplete="new-password" disabled /></label>
                   <label>URL <input id="add-url" type="url" value="https://gui.example.com" disabled /></label>
-                  <label>Notes <input id="add-notes" type="text" value="Added from Anahtar GUI alpha" disabled /></label>
+                  <label>Notes <input id="add-notes" type="text" value="Added from Anahtar GUI" disabled /></label>
                   <button id="add-entry" type="submit" disabled>Add entry</button>
                 </form>
 

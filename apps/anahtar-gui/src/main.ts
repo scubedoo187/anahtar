@@ -122,6 +122,7 @@ async function runUnlock(): Promise<void> {
     const entries = await unlockVault(request);
     state.activeSession = request;
     state.activeEntries = entries;
+    state.activeView = "browse";
     clearSelection(state);
     clearPasswordInput();
     renderAppChrome();
@@ -149,6 +150,7 @@ async function refreshEntriesAfterWrite(changedEntryId?: string | null): Promise
 async function lockVault(): Promise<void> {
   state.activeSession = null;
   state.activeEntries = [];
+  state.activeView = "browse";
   clearSelection(state);
   clearClipboardTimer();
   clearPasswordInput();
