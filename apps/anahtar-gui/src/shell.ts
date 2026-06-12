@@ -33,6 +33,8 @@ export function renderShell(app: HTMLDivElement): void {
           <div class="session-actions">
             <button id="unlock-vault" type="submit">Unlock</button>
           </div>
+
+          <div id="auth-output" class="output compact" aria-live="polite">Ready to unlock.</div>
         </form>
       </section>
 

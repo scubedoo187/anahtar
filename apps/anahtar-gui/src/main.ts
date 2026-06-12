@@ -92,26 +92,36 @@ function setActiveView(view: ActiveView): void {
 }
 
 async function chooseVaultFile(): Promise<void> {
-  const selected = await open({
-    multiple: false,
-    directory: false,
-    filters: [{ name: "KeePass vault", extensions: ["kdbx", "kdb"] }],
-  });
-  if (typeof selected === "string") {
-    setInputValue("#vault-path", selected);
-    focusMasterPassword();
+  try {
+    const selected = await open({
+      multiple: false,
+      directory: false,
+      filters: [{ name: "KeePass vault", extensions: ["kdbx", "kdb"] }],
+    });
+    if (typeof selected === "string") {
+      setInputValue("#vault-path", selected);
+      authOutputEl().textContent = "Vault selected. Enter the master password to unlock.";
+      focusMasterPassword();
+    }
+  } catch (error) {
+    authOutputEl().textContent = `File picker error: ${formatError(error)}`;
   }
 }
 
 async function chooseKeyFile(): Promise<void> {
-  const selected = await open({
-    multiple: false,
-    directory: false,
-    filters: [{ name: "Key file", extensions: ["key", "keyx", "keyfile", "txt"] }],
-  });
-  if (typeof selected === "string") {
-    setInputValue("#key-file", selected);
-    focusMasterPassword();
+  try {
+    const selected = await open({
+      multiple: false,
+      directory: false,
+      filters: [{ name: "Key file", extensions: ["key", "keyx", "keyfile", "txt"] }],
+    });
+    if (typeof selected === "string") {
+      setInputValue("#key-file", selected);
+      authOutputEl().textContent = "Key file selected. Enter the master password to unlock.";
+      focusMasterPassword();
+    }
+  } catch (error) {
+    authOutputEl().textContent = `File picker error: ${formatError(error)}`;
   }
 }
 
@@ -140,7 +150,7 @@ async function runInspect(): Promise<void> {
 }
 
 async function runUnlock(): Promise<void> {
-  await renderCommand(async () => {
+  await renderAuthAction(async () => {
     const request = formVaultRequest();
     if (!request.path.trim()) {
       throw new Error("vault path is required");
@@ -467,6 +477,16 @@ async function runDeleteEntry(): Promise<void> {
   });
 }
 
+async function renderAuthAction(action: () => Promise<string>): Promise<void> {
+  const output = authOutputEl();
+  output.textContent = "Unlocking…";
+  try {
+    output.textContent = await action();
+  } catch (error) {
+    output.textContent = `Error: ${formatError(error)}`;
+  }
+}
+
 async function renderCommand(action: () => Promise<string>): Promise<void> {
   const output = outputEl();
   output.textContent = "Running…";
@@ -497,6 +517,14 @@ function formVaultRequest(): VaultRequest {
 
 function clearPasswordInput(): void {
   setInputValue("#master-password", "");
+}
+
+function authOutputEl(): HTMLDivElement {
+  const output = document.querySelector<HTMLDivElement>("#auth-output");
+  if (!output) {
+    throw new Error("auth output element missing");
+  }
+  return output;
 }
 
 function focusMasterPassword(): void {
