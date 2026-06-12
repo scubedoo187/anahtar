@@ -4,9 +4,9 @@ export function renderShell(app: HTMLDivElement): void {
   // Static shell only: do not interpolate vault, entry, or secret data into this template.
   app.innerHTML = `
     <section class="shell desktop-shell">
-      <section id="auth-screen" class="auth-screen" aria-label="Unlock vault">
+      <section id="auth-screen" class="auth-screen" aria-label="Anahtar">
         <form id="unlock-form" class="auth-card">
-          <h1>Unlock vault</h1>
+          <h1>Anahtar</h1>
           <p class="hint">Choose a KDBX vault and enter its master password for this in-memory session.</p>
 
           <label>
