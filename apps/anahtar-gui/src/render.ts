@@ -7,9 +7,28 @@ import {
   groupListEl,
   setDisabled,
 } from "./dom";
-import type { AppState } from "./state";
+import type { ActiveView, AppState } from "./state";
 
 export type EntrySelectHandler = (entryId: string) => void;
+
+const activeViews: ActiveView[] = ["browse", "groups", "audit", "write", "status"];
+
+export function renderNavigationState(state: AppState): void {
+  for (const view of activeViews) {
+    const active = state.activeView === view;
+    const button = document.querySelector<HTMLButtonElement>(`[data-view="${view}"]`);
+    if (button) {
+      button.classList.toggle("active", active);
+      button.setAttribute("aria-selected", String(active));
+    }
+
+    const panel = document.querySelector<HTMLElement>(`[data-view-panel="${view}"]`);
+    if (panel) {
+      panel.hidden = !active;
+    }
+  }
+}
+
 
 export function renderSessionState(state: AppState): void {
   const unlocked = state.activeSession !== null;

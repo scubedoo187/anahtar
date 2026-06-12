@@ -1,6 +1,9 @@
 import type { EntryDetail, EntrySummary, VaultRequest } from "./api";
 
+export type ActiveView = "browse" | "groups" | "audit" | "write" | "status";
+
 export type AppState = {
+  activeView: ActiveView;
   activeSession: VaultRequest | null;
   activeEntries: EntrySummary[];
   selectedEntryId: string | null;
@@ -10,6 +13,7 @@ export type AppState = {
 
 export function createInitialState(): AppState {
   return {
+    activeView: "browse",
     activeSession: null,
     activeEntries: [],
     selectedEntryId: null,

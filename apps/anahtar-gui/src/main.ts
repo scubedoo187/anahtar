@@ -32,10 +32,11 @@ import {
   renderEntryDetail,
   renderEntryList,
   renderGroups,
+  renderNavigationState,
   renderSessionState,
   renderWriteReport,
 } from "./render";
-import { createInitialState, clearSelection, requireSelectedDetail, requireSession } from "./state";
+import { createInitialState, clearSelection, requireSelectedDetail, requireSession, type ActiveView } from "./state";
 import { defaultVaultPath, renderShell } from "./shell";
 import "./styles.css";
 
@@ -50,8 +51,9 @@ const state = createInitialState();
 renderShell(app);
 setInputValue("#vault-path", defaultVaultPath);
 void refreshBackendStatus();
-renderSessionState(state);
+renderAppChrome();
 
+bindNavigation();
 bindButton("#refresh-status", refreshBackendStatus);
 bindButton("#inspect-vault", runInspect);
 bindButton("#unlock-vault", runUnlock);
@@ -69,6 +71,24 @@ bindButton("#run-audit", runAudit);
 bindForm("#add-entry-form", runAddEntry);
 bindForm("#edit-entry-form", runEditEntry);
 bindButton("#delete-entry", runDeleteEntry);
+
+function bindNavigation(): void {
+  for (const view of ["browse", "groups", "audit", "write", "status"] as ActiveView[]) {
+    bindButton(`#nav-${view}`, async () => {
+      setActiveView(view);
+    });
+  }
+}
+
+function setActiveView(view: ActiveView): void {
+  state.activeView = view;
+  renderAppChrome();
+}
+
+function renderAppChrome(): void {
+  renderSessionState(state);
+  renderNavigationState(state);
+}
 
 async function refreshBackendStatus(): Promise<void> {
   const statusEl = document.querySelector<HTMLParagraphElement>("#backend-status");
@@ -104,7 +124,7 @@ async function runUnlock(): Promise<void> {
     state.activeEntries = entries;
     clearSelection(state);
     clearPasswordInput();
-    renderSessionState(state);
+    renderAppChrome();
     renderEntryList(state, entries, selectEntry);
     renderEmptyDetail("Select an entry to view details.");
     return `Unlocked ${entries.length} entries. Select an entry from the list to view safe details.`;
@@ -123,7 +143,7 @@ async function refreshEntriesAfterWrite(changedEntryId?: string | null): Promise
   } else {
     renderEmptyDetail("Select an entry to view details.");
   }
-  renderSessionState(state);
+  renderAppChrome();
 }
 
 async function lockVault(): Promise<void> {
@@ -132,7 +152,7 @@ async function lockVault(): Promise<void> {
   clearSelection(state);
   clearClipboardTimer();
   clearPasswordInput();
-  renderSessionState(state);
+  renderAppChrome();
   renderEntryList(state, [], selectEntry);
   renderEmptyDetail("Select an entry to view details.");
   renderGroups(state, []);
@@ -150,7 +170,7 @@ async function runSearch(): Promise<void> {
     clearSelection(state);
     renderEntryList(state, entries, selectEntry);
     renderEmptyDetail("Select a search result to view details.");
-    renderSessionState(state);
+    renderAppChrome();
     return `Search returned ${entries.length} entries.`;
   });
 }
@@ -160,7 +180,7 @@ async function resetList(): Promise<void> {
   renderEntryList(state, state.activeEntries, selectEntry);
   renderEmptyDetail("Select an entry to view details.");
   outputEl().textContent = `Showing ${state.activeEntries.length} entries from current in-memory list.`;
-  renderSessionState(state);
+  renderAppChrome();
 }
 
 function selectEntry(entryId: string): void {
@@ -219,7 +239,7 @@ async function loadSelectedDetail(revealPassword: boolean): Promise<void> {
     state.selectedDetail = detail;
     state.detailRevealed = revealPassword;
     renderEntryDetail(detail, revealPassword);
-    renderSessionState(state);
+    renderAppChrome();
   } catch (error) {
     detailEl.textContent = `Error: ${formatError(error)}`;
   }
