@@ -5,18 +5,24 @@ export function renderShell(app: HTMLDivElement): void {
   app.innerHTML = `
     <section class="shell desktop-shell">
       <section id="auth-screen" class="auth-screen" aria-label="Unlock vault">
-        <section class="auth-card">
+        <form id="unlock-form" class="auth-card">
           <h1>Unlock vault</h1>
           <p class="hint">Choose a KDBX vault and enter its master password for this in-memory session.</p>
 
           <label>
             Vault path
-            <input id="vault-path" type="text" spellcheck="false" />
+            <span class="path-picker-row">
+              <input id="vault-path" type="text" spellcheck="false" />
+              <button id="browse-vault" class="icon-button" type="button" title="Choose vault file" aria-label="Choose vault file">…</button>
+            </span>
           </label>
 
           <label>
             Key-file path <span class="muted">optional</span>
-            <input id="key-file" type="text" spellcheck="false" placeholder="/path/to/key-file.keyx" />
+            <span class="path-picker-row">
+              <input id="key-file" type="text" spellcheck="false" placeholder="/path/to/key-file.keyx" />
+              <button id="browse-key-file" class="icon-button" type="button" title="Choose key file" aria-label="Choose key file">…</button>
+            </span>
           </label>
 
           <label>
@@ -25,9 +31,9 @@ export function renderShell(app: HTMLDivElement): void {
           </label>
 
           <div class="session-actions">
-            <button id="unlock-vault" type="button">Unlock</button>
+            <button id="unlock-vault" type="submit">Unlock</button>
           </div>
-        </section>
+        </form>
       </section>
 
       <section id="app-frame" class="app-frame" aria-label="Anahtar workspace" hidden>
@@ -36,10 +42,10 @@ export function renderShell(app: HTMLDivElement): void {
             <div id="session-status" class="status locked">Locked</div>
           </div>
           <div class="topbar-actions">
-            <button id="nav-browse" type="button" data-view="browse" aria-selected="true">Browse</button>
-            <button id="nav-audit" type="button" data-view="audit" aria-selected="false">Audit</button>
-            <button id="nav-status" type="button" data-view="status" aria-selected="false">Status</button>
-            <button id="lock-vault" type="button" disabled>Lock</button>
+            <button id="nav-browse" class="icon-button" type="button" data-view="browse" aria-selected="true" title="Browse" aria-label="Browse">⌂</button>
+            <button id="nav-audit" class="icon-button" type="button" data-view="audit" aria-selected="false" title="Audit" aria-label="Audit">✓</button>
+            <button id="nav-status" class="icon-button" type="button" data-view="status" aria-selected="false" title="Status" aria-label="Status">ⓘ</button>
+            <button id="lock-vault" class="icon-button" type="button" disabled title="Lock" aria-label="Lock">⏻</button>
           </div>
         </header>
 
@@ -52,9 +58,9 @@ export function renderShell(app: HTMLDivElement): void {
                   <p class="hint">Select a group to filter entries.</p>
                 </div>
                 <div class="mini-actions">
-                  <button id="add-group" type="button" disabled>+</button>
-                  <button id="rename-group" type="button" disabled>Rename</button>
-                  <button id="delete-group" type="button" disabled>Delete</button>
+                  <button id="add-group" class="icon-button" type="button" disabled title="Add group" aria-label="Add group">＋</button>
+                  <button id="rename-group" class="icon-button" type="button" disabled title="Rename group" aria-label="Rename group">✎</button>
+                  <button id="delete-group" class="icon-button danger-icon" type="button" disabled title="Delete group" aria-label="Delete group">⌫</button>
                 </div>
               </div>
               <div id="group-list" class="group-tree" aria-live="polite">Unlock first to inspect groups.</div>
@@ -66,7 +72,7 @@ export function renderShell(app: HTMLDivElement): void {
                   <h2>Entries</h2>
                   <p class="hint">Search and select an entry. Detail lookup uses the selected UUID.</p>
                 </div>
-                <button id="new-entry" type="button" disabled>+ New</button>
+                <button id="new-entry" class="icon-button" type="button" disabled title="New entry" aria-label="New entry">＋</button>
               </div>
               <label>
                 Search query
@@ -86,9 +92,9 @@ export function renderShell(app: HTMLDivElement): void {
                   <p class="hint">Passwords and protected fields are hidden by default.</p>
                 </div>
                 <div class="mini-actions">
-                  <button id="reload-detail" type="button" disabled>Reload</button>
-                  <button id="edit-selected" type="button" disabled>Edit</button>
-                  <button id="delete-entry" type="button" disabled>Delete</button>
+                  <button id="reload-detail" class="icon-button" type="button" disabled title="Reload detail" aria-label="Reload detail">↻</button>
+                  <button id="edit-selected" class="icon-button" type="button" disabled title="Edit entry" aria-label="Edit entry">✎</button>
+                  <button id="delete-entry" class="icon-button danger-icon" type="button" disabled title="Delete entry" aria-label="Delete entry">⌫</button>
                 </div>
               </div>
               <div id="clipboard-status" class="status neutral">Clipboard idle.</div>
@@ -103,7 +109,7 @@ export function renderShell(app: HTMLDivElement): void {
                   <h2>Audit</h2>
                   <p class="hint">Audit findings are designed to be actionable without printing secret values.</p>
                 </div>
-                <button id="run-audit" type="button" disabled>Run audit</button>
+                <button id="run-audit" class="icon-button" type="button" disabled title="Run audit" aria-label="Run audit">▶</button>
               </div>
               <div id="audit-findings" class="detail-output" aria-live="polite">Unlock first to run audit.</div>
             </section>
@@ -116,10 +122,10 @@ export function renderShell(app: HTMLDivElement): void {
                   <h2>Backend status</h2>
                   <p class="hint">Inspect the Rust backend and current vault file.</p>
                 </div>
-                <button id="refresh-status" type="button">Refresh backend status</button>
+                <button id="refresh-status" class="icon-button" type="button" title="Refresh backend status" aria-label="Refresh backend status">↻</button>
               </div>
               <p id="backend-status">Checking Rust backend…</p>
-              <button id="inspect-vault" type="button">Inspect vault</button>
+              <button id="inspect-vault" class="icon-button" type="button" title="Inspect vault" aria-label="Inspect vault">ⓘ</button>
               <div id="command-output" class="output compact" aria-live="polite">No command run yet.</div>
             </section>
           </section>

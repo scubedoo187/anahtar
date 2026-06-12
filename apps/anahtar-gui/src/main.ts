@@ -1,3 +1,4 @@
+import { open } from "@tauri-apps/plugin-dialog";
 import {
   addEntry,
   addGroup,
@@ -22,6 +23,7 @@ import {
 import { clearClipboardTimer, copyWithOwnedClear, setClipboardStatus } from "./clipboard";
 import {
   bindButton,
+  bindForm,
   detailOutputEl,
   inputValue,
   outputEl,
@@ -56,11 +58,14 @@ renderShell(app);
 setInputValue("#vault-path", defaultVaultPath);
 void refreshBackendStatus();
 renderAppChrome();
+focusMasterPassword();
 
 bindNavigation();
 bindButton("#refresh-status", refreshBackendStatus);
 bindButton("#inspect-vault", runInspect);
-bindButton("#unlock-vault", runUnlock);
+bindButton("#browse-vault", chooseVaultFile);
+bindButton("#browse-key-file", chooseKeyFile);
+bindForm("#unlock-form", runUnlock);
 bindButton("#lock-vault", lockVault);
 bindButton("#search-entries", runSearch);
 bindButton("#reset-list", resetList);
@@ -84,6 +89,30 @@ function bindNavigation(): void {
 function setActiveView(view: ActiveView): void {
   state.activeView = view;
   renderAppChrome();
+}
+
+async function chooseVaultFile(): Promise<void> {
+  const selected = await open({
+    multiple: false,
+    directory: false,
+    filters: [{ name: "KeePass vault", extensions: ["kdbx", "kdb"] }],
+  });
+  if (typeof selected === "string") {
+    setInputValue("#vault-path", selected);
+    focusMasterPassword();
+  }
+}
+
+async function chooseKeyFile(): Promise<void> {
+  const selected = await open({
+    multiple: false,
+    directory: false,
+    filters: [{ name: "Key file", extensions: ["key", "keyx", "keyfile", "txt"] }],
+  });
+  if (typeof selected === "string") {
+    setInputValue("#key-file", selected);
+    focusMasterPassword();
+  }
 }
 
 function renderAppChrome(): void {
@@ -468,6 +497,10 @@ function formVaultRequest(): VaultRequest {
 
 function clearPasswordInput(): void {
   setInputValue("#master-password", "");
+}
+
+function focusMasterPassword(): void {
+  document.querySelector<HTMLInputElement>("#master-password")?.focus();
 }
 
 function vaultPath(): string {

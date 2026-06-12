@@ -167,13 +167,13 @@ export function renderEntryDetail(
     detailLine("ID", detail.id),
     detailLine("Group", detail.group_path),
     detailLine("Title", detail.title ?? ""),
-    detailLine("Username", detail.username ?? "", [fieldButton("Copy", actions.copyUsername, !detail.username)]),
+    detailLine("Username", detail.username ?? "", [fieldButton("⧉", "Copy username", actions.copyUsername, !detail.username)]),
     detailLine("Password", revealPassword ? (detail.password ?? "") : "<hidden>", [
-      fieldButton("Copy", actions.copyPassword, false),
-      fieldButton("Reveal", actions.revealPassword, revealPassword),
+      fieldButton("⧉", "Copy password", actions.copyPassword, false),
+      fieldButton("👁", "Reveal password", actions.revealPassword, revealPassword),
     ]),
-    detailLine("URL", detail.url ?? "", [fieldButton("Copy", actions.copyUrl, !detail.url)]),
-    detailLine("TOTP", "one-time code", [fieldButton("Copy code", actions.copyTotp, false)]),
+    detailLine("URL", detail.url ?? "", [fieldButton("⧉", "Copy URL", actions.copyUrl, !detail.url)]),
+    detailLine("TOTP", "one-time code", [fieldButton("⧉", "Copy TOTP code", actions.copyTotp, false)]),
     detailLine("Notes", detail.notes ?? ""),
     detailLine("Sensitive fields", revealPassword ? "revealed by explicit action" : "hidden"),
   );
@@ -288,11 +288,18 @@ function vaultName(path?: string): string {
   return path.split(/[\\/]/).filter(Boolean).pop() ?? path;
 }
 
-function fieldButton(label: string, action: () => Promise<void>, disabled: boolean): HTMLButtonElement {
+function fieldButton(
+  icon: string,
+  label: string,
+  action: () => Promise<void>,
+  disabled: boolean,
+): HTMLButtonElement {
   const button = document.createElement("button");
   button.type = "button";
-  button.className = "field-action";
-  button.textContent = label;
+  button.className = "field-action icon-button";
+  button.textContent = icon;
+  button.title = label;
+  button.setAttribute("aria-label", label);
   button.disabled = disabled;
   button.addEventListener("click", () => {
     void action();
