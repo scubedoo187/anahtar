@@ -132,6 +132,29 @@ export function renderShell(app: HTMLDivElement): void {
             </section>
           </section>
         </main>
+
+        <div id="entry-dialog" class="modal-backdrop" hidden>
+          <form id="entry-dialog-form" class="modal-card">
+            <div class="pane-header split-header">
+              <div>
+                <h2 id="entry-dialog-title">Entry</h2>
+                <p class="hint">Password is only changed when the password field is non-empty.</p>
+              </div>
+              <button id="entry-dialog-close" class="icon-button" type="button" title="Close" aria-label="Close">×</button>
+            </div>
+            <label>Group path <input id="dialog-group" type="text" required /></label>
+            <label>Title <input id="dialog-title" type="text" required /></label>
+            <label>Username <input id="dialog-username" type="text" /></label>
+            <label>Password <input id="dialog-password" type="password" autocomplete="new-password" /></label>
+            <label>URL <input id="dialog-url" type="url" /></label>
+            <label>Notes <input id="dialog-notes" type="text" /></label>
+            <div id="entry-dialog-output" class="output compact" aria-live="polite">Ready.</div>
+            <div class="session-actions">
+              <button id="entry-dialog-submit" type="submit">Save</button>
+              <button id="entry-dialog-cancel" type="button">Cancel</button>
+            </div>
+          </form>
+        </div>
       </section>
     </section>
   `;

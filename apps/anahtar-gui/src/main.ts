@@ -53,6 +53,7 @@ if (!app) {
 }
 
 const state = createInitialState();
+let entryDialogMode: "add" | "edit" | null = null;
 
 renderShell(app);
 setInputValue("#vault-path", defaultVaultPath);
@@ -70,8 +71,11 @@ bindButton("#lock-vault", lockVault);
 bindButton("#search-entries", runSearch);
 bindButton("#reset-list", resetList);
 bindButton("#reload-detail", reloadSafeDetail);
-bindButton("#new-entry", runAddEntry);
-bindButton("#edit-selected", runEditEntry);
+bindButton("#new-entry", openAddEntryDialog);
+bindButton("#edit-selected", openEditEntryDialog);
+bindButton("#entry-dialog-close", closeEntryDialog);
+bindButton("#entry-dialog-cancel", closeEntryDialog);
+bindForm("#entry-dialog-form", submitEntryDialog);
 bindButton("#add-group", runAddGroup);
 bindButton("#rename-group", runRenameGroup);
 bindButton("#delete-group", runDeleteGroup);
@@ -312,6 +316,23 @@ function promptValue(label: string, defaultValue: string): string | null {
   return window.prompt(label, defaultValue);
 }
 
+function showEntryDialog(): void {
+  const dialog = document.querySelector<HTMLElement>("#entry-dialog");
+  if (dialog) dialog.hidden = false;
+  document.querySelector<HTMLInputElement>("#dialog-title")?.focus();
+}
+
+function setDialogTitle(title: string): void {
+  const titleEl = document.querySelector<HTMLHeadingElement>("#entry-dialog-title");
+  if (titleEl) titleEl.textContent = title;
+}
+
+function entryDialogOutputEl(): HTMLDivElement {
+  const output = document.querySelector<HTMLDivElement>("#entry-dialog-output");
+  if (!output) throw new Error("entry dialog output element missing");
+  return output;
+}
+
 async function loadSelectedDetail(revealPassword: boolean): Promise<void> {
   const session = requireSession(state);
   if (!state.selectedEntryId) {
@@ -393,69 +414,96 @@ async function runAudit(): Promise<void> {
   });
 }
 
-async function runAddEntry(): Promise<void> {
-  await renderWriteAction(async () => {
-    const session = requireSession(state);
-    const groupPath = promptValue("Group path", state.selectedGroupPath ?? "General/Web");
-    if (groupPath === null) return "Add entry cancelled.";
-    const title = promptValue("Title", "");
-    if (title === null) return "Add entry cancelled.";
-    const username = promptValue("Username", "");
-    if (username === null) return "Add entry cancelled.";
-    const password = promptValue("Password", "");
-    if (password === null) return "Add entry cancelled.";
-    const url = promptValue("URL", "");
-    if (url === null) return "Add entry cancelled.";
-    const notes = promptValue("Notes", "");
-    if (notes === null) return "Add entry cancelled.";
+async function openAddEntryDialog(): Promise<void> {
+  requireSession(state);
+  entryDialogMode = "add";
+  setDialogTitle("New entry");
+  setInputValue("#dialog-group", state.selectedGroupPath ?? "General/Web");
+  setInputValue("#dialog-title", "");
+  setInputValue("#dialog-username", "");
+  setInputValue("#dialog-password", "");
+  setInputValue("#dialog-url", "");
+  setInputValue("#dialog-notes", "");
+  entryDialogOutputEl().textContent = "Ready.";
+  showEntryDialog();
+}
 
+async function openEditEntryDialog(): Promise<void> {
+  requireSession(state);
+  const detail = requireSelectedDetail(state);
+  entryDialogMode = "edit";
+  setDialogTitle("Edit entry");
+  setInputValue("#dialog-group", detail.group_path);
+  setInputValue("#dialog-title", detail.title ?? "");
+  setInputValue("#dialog-username", detail.username ?? "");
+  setInputValue("#dialog-password", "");
+  setInputValue("#dialog-url", detail.url ?? "");
+  setInputValue("#dialog-notes", detail.notes ?? "");
+  entryDialogOutputEl().textContent = "Leave password blank to keep the current password.";
+  showEntryDialog();
+}
+
+async function closeEntryDialog(): Promise<void> {
+  entryDialogMode = null;
+  const dialog = document.querySelector<HTMLElement>("#entry-dialog");
+  if (dialog) dialog.hidden = true;
+}
+
+async function submitEntryDialog(): Promise<void> {
+  const output = entryDialogOutputEl();
+  output.textContent = "Saving…";
+  try {
+    output.textContent = await saveEntryDialog();
+  } catch (error) {
+    output.textContent = `Error: ${formatError(error)}`;
+  }
+}
+
+async function saveEntryDialog(): Promise<string> {
+  const session = requireSession(state);
+  if (entryDialogMode === "add") {
     const request: AddEntryRequest = {
-      group_path: groupPath,
-      title,
-      username,
-      password,
-      url,
-      notes,
+      group_path: inputValue("#dialog-group"),
+      title: inputValue("#dialog-title"),
+      username: inputValue("#dialog-username"),
+      password: inputValue("#dialog-password"),
+      url: inputValue("#dialog-url"),
+      notes: inputValue("#dialog-notes"),
       backup_dir: null,
     };
     if (!request.group_path.trim() || !request.title.trim()) {
       throw new Error("group path and title are required");
     }
     const report = await addEntry(session, request);
+    await closeEntryDialog();
     await refreshEntriesAfterWrite(report.changed_entry_id);
     return renderWriteReport(report);
-  });
-}
+  }
 
-async function runEditEntry(): Promise<void> {
-  await renderWriteAction(async () => {
-    const session = requireSession(state);
+  if (entryDialogMode === "edit") {
     const detail = requireSelectedDetail(state);
     if (!state.selectedEntryId) {
       throw new Error("select an entry first");
     }
-
-    const groupPath = promptValue("Group path", detail.group_path);
-    if (groupPath === null) return "Edit entry cancelled.";
-    const title = promptValue("Title", detail.title ?? "");
-    if (title === null) return "Edit entry cancelled.";
-    const username = promptValue("Username", detail.username ?? "");
-    if (username === null) return "Edit entry cancelled.";
-    const password = promptValue("Password (leave blank to keep current password)", "");
-    if (password === null) return "Edit entry cancelled.";
-    const url = promptValue("URL", detail.url ?? "");
-    if (url === null) return "Edit entry cancelled.";
-    const notes = promptValue("Notes", detail.notes ?? "");
-    if (notes === null) return "Edit entry cancelled.";
-
-    const request: EditEntryRequest = { title, username, password, url, notes, backup_dir: null };
+    const groupPath = inputValue("#dialog-group").trim();
+    const request: EditEntryRequest = {
+      title: inputValue("#dialog-title"),
+      username: inputValue("#dialog-username"),
+      password: inputValue("#dialog-password"),
+      url: inputValue("#dialog-url"),
+      notes: inputValue("#dialog-notes"),
+      backup_dir: null,
+    };
     let report = await editEntry(session, state.selectedEntryId, request);
-    if (groupPath.trim() && groupPath.trim() !== detail.group_path) {
-      report = await moveEntry(session, state.selectedEntryId, groupPath.trim());
+    if (groupPath && groupPath !== detail.group_path) {
+      report = await moveEntry(session, state.selectedEntryId, groupPath);
     }
+    await closeEntryDialog();
     await refreshEntriesAfterWrite(report.changed_entry_id ?? state.selectedEntryId);
     return renderWriteReport(report);
-  });
+  }
+
+  throw new Error("entry dialog is not open");
 }
 
 async function runDeleteEntry(): Promise<void> {
