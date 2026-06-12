@@ -1,7 +1,22 @@
 :root {
-  color: #f4efe8;
-  background: #151515;
+  color: #e8edf2;
+  background: #0f1115;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --bg: #0f1115;
+  --panel: #171b21;
+  --panel-strong: #1f252d;
+  --border: #3a4350;
+  --border-strong: #596678;
+  --text: #e8edf2;
+  --muted: #a8b3c2;
+  --accent: #7fb4ff;
+  --accent-strong: #a9ceff;
+  --accent-text: #07111f;
+  --danger: #ff8a7a;
+  --danger-bg: #3a1d1d;
+  --success: #8ee8a5;
+  --success-bg: #173321;
+  --radius: 0;
 }
 
 * {
@@ -12,17 +27,15 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  background:
-    radial-gradient(circle at top left, rgba(124, 85, 44, 0.42) 0, transparent 34rem),
-    linear-gradient(135deg, #111 0%, #1c1b1a 52%, #121212 100%);
+  background: var(--bg);
 }
 
 button {
-  border: 0;
-  border-radius: 0.55rem;
-  padding: 0.6rem 0.8rem;
-  color: #151515;
-  background: #f1c27d;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  padding: 0.58rem 0.78rem;
+  color: var(--accent-text);
+  background: var(--accent);
   font-weight: 800;
   cursor: pointer;
 }
@@ -37,21 +50,21 @@ button {
 }
 
 .danger-icon {
-  color: #ffe8e3;
-  background: rgba(150, 52, 36, 0.55);
+  color: var(--text);
+  background: var(--danger-bg);
 }
 
 .danger-icon:hover {
-  background: rgba(196, 75, 54, 0.82);
+  background: #5a2724;
 }
 
 button:hover {
-  background: #ffd596;
+  background: var(--accent-strong);
 }
 
 button:focus-visible,
 input:focus-visible {
-  outline: 2px solid #ffd596;
+  outline: 2px solid var(--accent-strong);
   outline-offset: 2px;
 }
 
@@ -82,17 +95,17 @@ input:focus-visible {
 .pane,
 .sidebar,
 .workspace-topbar {
-  border: 1px solid rgba(241, 194, 125, 0.16);
-  background: rgba(255, 255, 255, 0.06);
-  box-shadow: 0 1.5rem 4rem rgba(0, 0, 0, 0.22);
-  backdrop-filter: blur(18px);
+  border: 1px solid var(--border);
+  background: var(--panel);
+  box-shadow: none;
+  backdrop-filter: none;
 }
 
 .auth-card {
   display: grid;
   gap: 1rem;
   width: min(34rem, 100%);
-  border-radius: 1.1rem;
+  border-radius: var(--radius);
   padding: 1.5rem;
 }
 
@@ -114,7 +127,7 @@ h1 {
   gap: 0;
   min-height: calc(100vh - 2rem);
   overflow: hidden;
-  border-radius: 0.75rem;
+  border-radius: var(--radius);
 }
 
 .workspace-topbar {
@@ -139,7 +152,7 @@ h1 {
   border-width: 0 1px 0 0;
   border-radius: 0;
   padding: 1rem;
-  background: rgba(0, 0, 0, 0.2);
+  background: var(--panel-strong);
   box-shadow: none;
 }
 
@@ -150,7 +163,7 @@ h1 {
 
 .sidebar-heading {
   margin: 0.25rem 0;
-  color: #c8bfb4;
+  color: var(--muted);
   font-size: 0.74rem;
   font-weight: 900;
   letter-spacing: 0.12em;
@@ -159,7 +172,7 @@ h1 {
 
 .nav-button {
   width: 100%;
-  color: #efe7dd;
+  color: var(--text);
   text-align: left;
   background: transparent;
 }
@@ -168,8 +181,8 @@ h1 {
 .nav-button:hover,
 .nav-button.active,
 .nav-button[aria-selected="true"] {
-  color: #151515;
-  background: #f1c27d;
+  color: var(--accent-text);
+  background: var(--accent);
 }
 
 .workspace {
@@ -209,7 +222,7 @@ h1 {
   border-radius: 0;
   padding: 0.85rem;
   box-shadow: none;
-  background: rgba(255, 255, 255, 0.045);
+  background: var(--panel);
 }
 
 .browse-layout .pane:last-child {
@@ -239,7 +252,7 @@ h1 {
 label {
   display: grid;
   gap: 0.4rem;
-  color: #efe7dd;
+  color: var(--text);
   font-weight: 800;
 }
 
@@ -252,11 +265,11 @@ label {
 input,
 select {
   width: 100%;
-  border: 1px solid rgba(241, 194, 125, 0.24);
-  border-radius: 0.55rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
   padding: 0.68rem 0.78rem;
-  color: #f4efe8;
-  background: rgba(0, 0, 0, 0.24);
+  color: var(--text);
+  background: #0c0f13;
 }
 
 .button-row,
@@ -275,37 +288,37 @@ select {
 .danger-zone {
   display: grid;
   gap: 0.75rem;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
   padding: 1rem;
-  background: rgba(0, 0, 0, 0.14);
+  background: var(--panel-strong);
 }
 
 .hint,
 .muted {
   margin: 0;
-  color: #c8bfb4;
+  color: var(--muted);
 }
 
 .status {
-  border-radius: 0.75rem;
+  border-radius: var(--radius);
   padding: 0.8rem 0.95rem;
   font-weight: 800;
 }
 
 .status.locked {
-  color: #f3c8bf;
-  background: rgba(150, 52, 36, 0.18);
+  color: var(--danger);
+  background: var(--danger-bg);
 }
 
 .status.unlocked {
-  color: #c3efcf;
-  background: rgba(37, 118, 63, 0.2);
+  color: var(--success);
+  background: var(--success-bg);
 }
 
 .status.neutral {
-  color: #e3d7c8;
-  background: rgba(255, 255, 255, 0.08);
+  color: var(--muted);
+  background: var(--border);
 }
 
 input:disabled,
@@ -337,10 +350,10 @@ button:disabled {
   gap: 0.25rem;
   width: 100%;
   border: 0;
-  border-bottom: 1px solid rgba(241, 194, 125, 0.12);
+  border-bottom: 1px solid var(--border);
   border-radius: 0;
   padding: 0.72rem 0.5rem;
-  color: #f4efe8;
+  color: var(--text);
   text-align: left;
   background: transparent;
 }
@@ -350,8 +363,8 @@ button:disabled {
 .group-tree-row:hover,
 .group-tree-row.selected,
 .recent-vault-row:hover {
-  color: #151515;
-  background: #f1c27d;
+  color: var(--accent-text);
+  background: var(--accent);
 }
 
 .group-tree-row {
@@ -380,7 +393,7 @@ button:disabled {
 .recent-vaults-section {
   display: grid;
   gap: 0.6rem;
-  border-top: 1px solid rgba(241, 194, 125, 0.14);
+  border-top: 1px solid var(--border);
   padding-top: 0.8rem;
 }
 
@@ -408,7 +421,7 @@ button:disabled {
   border: 0;
   border-radius: 0;
   padding: 0.25rem 0;
-  color: #f5eadb;
+  color: var(--text);
   background: transparent;
 }
 
@@ -440,7 +453,7 @@ button:disabled {
   gap: 0.8rem;
   align-items: center;
   padding-bottom: 0.5rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid var(--border);
 }
 
 .detail-line-with-actions {
@@ -477,15 +490,15 @@ button:disabled {
   width: min(34rem, 100%);
   max-height: calc(100vh - 2rem);
   overflow: auto;
-  border: 1px solid rgba(241, 194, 125, 0.2);
-  border-radius: 0.9rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
   padding: 1rem;
-  background: #20201f;
-  box-shadow: 0 2rem 5rem rgba(0, 0, 0, 0.45);
+  background: var(--panel);
+  box-shadow: none;
 }
 
 .detail-label {
-  color: #c8bfb4;
+  color: var(--muted);
   font-weight: 800;
 }
 
@@ -495,7 +508,7 @@ button:disabled {
 
 #backend-status {
   margin: 0;
-  color: #e3d7c8;
+  color: var(--muted);
 }
 
 @media (max-width: 1080px) {
