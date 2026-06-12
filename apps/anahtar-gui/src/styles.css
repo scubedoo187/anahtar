@@ -389,6 +389,15 @@ button:disabled {
   font-size: 1rem;
 }
 
+.recent-vault-row strong {
+  font-size: 0.96rem;
+}
+
+.recent-vault-row span {
+  font-size: 0.72rem;
+  opacity: 0.66;
+}
+
 .audit-row {
   gap: 0.5rem;
 }

@@ -79,8 +79,8 @@ function friendlyErrorMessage(error: AnahtarGuiError): string {
   if (lower.includes("new group name is required")) {
     return "Enter a new group name.";
   }
-  if (lower.includes("cannot delete group with")) {
-    return message.replace("cannot", "Cannot");
+  if (lower.includes("cannot delete group with") || lower.includes("group contains")) {
+    return "This group has entries in it or in a child group. Move or delete those entries before deleting the group.";
   }
   if (lower.includes("dialog.open not allowed")) {
     return "The file picker is not available yet. Restart the app and try again.";

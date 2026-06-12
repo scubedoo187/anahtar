@@ -4,7 +4,8 @@ use anahtar_core::{
     GroupSummary, TotpCode, VaultCredentials, VaultInfo, WriteReport,
 };
 use serde::{Deserialize, Serialize};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
+use tauri::Manager;
 
 type GuiResult<T> = Result<T, GuiError>;
 
@@ -64,13 +65,17 @@ fn backend_status() -> BackendStatus {
 }
 
 #[tauri::command]
-fn load_gui_config() -> GuiResult<GuiConfig> {
-    read_gui_config().map_err(|error| gui_error("config_failed", error))
+fn load_gui_config(app: tauri::AppHandle) -> GuiResult<GuiConfig> {
+    read_gui_config(&app).map_err(|error| gui_error("config_failed", error))
 }
 
 #[tauri::command]
-fn remember_vault(path: String, key_file: Option<String>) -> GuiResult<GuiConfig> {
-    let mut config = read_gui_config().map_err(|error| gui_error("config_failed", error))?;
+fn remember_vault(
+    app: tauri::AppHandle,
+    path: String,
+    key_file: Option<String>,
+) -> GuiResult<GuiConfig> {
+    let mut config = read_gui_config(&app).map_err(|error| gui_error("config_failed", error))?;
     let path = path.trim().to_string();
     if path.is_empty() {
         return Err(gui_error("validation_failed", "vault path is required"));
@@ -86,14 +91,14 @@ fn remember_vault(path: String, key_file: Option<String>) -> GuiResult<GuiConfig
         },
     );
     config.recent_vaults.truncate(5);
-    write_gui_config(&config).map_err(|error| gui_error("config_failed", error))?;
+    write_gui_config(&app, &config).map_err(|error| gui_error("config_failed", error))?;
     Ok(config)
 }
 
 #[tauri::command]
-fn clear_recent_vaults() -> GuiResult<GuiConfig> {
+fn clear_recent_vaults(app: tauri::AppHandle) -> GuiResult<GuiConfig> {
     let config = GuiConfig::default();
-    write_gui_config(&config).map_err(|error| gui_error("config_failed", error))?;
+    write_gui_config(&app, &config).map_err(|error| gui_error("config_failed", error))?;
     Ok(config)
 }
 
@@ -321,6 +326,19 @@ fn delete_group(
     backup_dir: Option<String>,
 ) -> GuiResult<WriteReport> {
     let credentials = credentials_from_gui(password, key_file);
+    let entries = AnahtarService::list(&path, &credentials)
+        .map_err(|error| gui_error("write_failed", error))?;
+    let entry_count = entries
+        .iter()
+        .filter(|entry| entry_is_in_group(&entry.group_path, &group_path))
+        .count();
+    if entry_count > 0 {
+        return Err(gui_error(
+            "validation_failed",
+            format!("group contains {entry_count} entries"),
+        ));
+    }
+
     AnahtarService::delete_group(
         &path,
         &credentials,
@@ -411,6 +429,19 @@ fn empty_secret_to_none(value: Option<String>) -> Option<String> {
     value.and_then(|value| (!value.is_empty()).then_some(value))
 }
 
+fn entry_is_in_group(entry_group_path: &str, group_path: &str) -> bool {
+    let entry = normalize_group_path(entry_group_path);
+    let group = normalize_group_path(group_path);
+    entry == group || entry.starts_with(&format!("{group}/"))
+}
+
+fn normalize_group_path(path: &str) -> String {
+    path.trim_matches('/')
+        .strip_prefix("Root/")
+        .unwrap_or(path.trim_matches('/'))
+        .to_string()
+}
+
 fn gui_error(kind: &'static str, error: impl std::fmt::Display) -> GuiError {
     GuiError {
         kind,
@@ -418,8 +449,8 @@ fn gui_error(kind: &'static str, error: impl std::fmt::Display) -> GuiError {
     }
 }
 
-fn read_gui_config() -> std::io::Result<GuiConfig> {
-    let path = gui_config_path()?;
+fn read_gui_config(app: &tauri::AppHandle) -> std::io::Result<GuiConfig> {
+    let path = gui_config_path(app)?;
     if !path.exists() {
         return Ok(GuiConfig::default());
     }
@@ -427,8 +458,8 @@ fn read_gui_config() -> std::io::Result<GuiConfig> {
     Ok(serde_json::from_str(&contents).unwrap_or_default())
 }
 
-fn write_gui_config(config: &GuiConfig) -> std::io::Result<()> {
-    let path = gui_config_path()?;
+fn write_gui_config(app: &tauri::AppHandle, config: &GuiConfig) -> std::io::Result<()> {
+    let path = gui_config_path(app)?;
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
@@ -436,14 +467,11 @@ fn write_gui_config(config: &GuiConfig) -> std::io::Result<()> {
     std::fs::write(path, contents)
 }
 
-fn gui_config_path() -> std::io::Result<PathBuf> {
-    let home = std::env::var_os("HOME")
-        .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "HOME is not set"))?;
-    Ok(Path::new(&home)
-        .join("Library")
-        .join("Application Support")
-        .join("com.anahtar.alpha")
-        .join("gui-config.json"))
+fn gui_config_path(app: &tauri::AppHandle) -> std::io::Result<PathBuf> {
+    app.path()
+        .app_config_dir()
+        .map(|dir| dir.join("gui-config.json"))
+        .map_err(|error| std::io::Error::other(error.to_string()))
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
