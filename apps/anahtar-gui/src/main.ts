@@ -29,9 +29,10 @@ import { errorMessage, formatError } from "./errors";
 import {
   renderAudit,
   renderEmptyDetail,
+  filterEntriesForSelectedGroup,
   renderEntryDetail,
   renderEntryList,
-  renderGroups,
+  renderGroupTree,
   renderNavigationState,
   renderSessionState,
   renderWriteReport,
@@ -61,19 +62,13 @@ bindButton("#lock-vault", lockVault);
 bindButton("#search-entries", runSearch);
 bindButton("#reset-list", resetList);
 bindButton("#reload-detail", reloadSafeDetail);
-bindButton("#reveal-detail", revealSelectedDetail);
-bindButton("#copy-username", copySelectedUsername);
-bindButton("#copy-password", copySelectedPassword);
-bindButton("#copy-url", copySelectedUrl);
-bindButton("#copy-totp", copySelectedTotp);
-bindButton("#load-groups", runLoadGroups);
 bindButton("#run-audit", runAudit);
 bindForm("#add-entry-form", runAddEntry);
 bindForm("#edit-entry-form", runEditEntry);
 bindButton("#delete-entry", runDeleteEntry);
 
 function bindNavigation(): void {
-  for (const view of ["browse", "groups", "audit", "write", "status"] as ActiveView[]) {
+  for (const view of ["browse", "audit", "write", "status"] as ActiveView[]) {
     bindButton(`#nav-${view}`, async () => {
       setActiveView(view);
     });
@@ -119,14 +114,18 @@ async function runUnlock(): Promise<void> {
       throw new Error("master password is required");
     }
 
-    const entries = await unlockVault(request);
+    const [entries, groups] = await Promise.all([unlockVault(request), listGroups(request)]);
     state.activeSession = request;
     state.activeEntries = entries;
+    state.visibleEntries = entries;
+    state.groups = groups;
+    state.selectedGroupPath = null;
     state.activeView = "browse";
     clearSelection(state);
     clearPasswordInput();
     renderAppChrome();
-    renderEntryList(state, entries, selectEntry);
+    renderGroupTree(state, state.groups, selectGroup);
+    renderEntryList(state, filteredEntries(), selectEntry);
     renderEmptyDetail("Select an entry to view details.");
     return `Unlocked ${entries.length} entries. Select an entry from the list to view safe details.`;
   });
@@ -134,11 +133,15 @@ async function runUnlock(): Promise<void> {
 
 async function refreshEntriesAfterWrite(changedEntryId?: string | null): Promise<void> {
   const session = requireSession(state);
-  state.activeEntries = await unlockVault(session);
+  const [entries, groups] = await Promise.all([unlockVault(session), listGroups(session)]);
+  state.activeEntries = entries;
+  state.visibleEntries = entries;
+  state.groups = groups;
   state.selectedEntryId = changedEntryId ?? null;
   state.selectedDetail = null;
   state.detailRevealed = false;
-  renderEntryList(state, state.activeEntries, selectEntry);
+  renderGroupTree(state, state.groups, selectGroup);
+  renderEntryList(state, filteredEntries(), selectEntry);
   if (state.selectedEntryId) {
     await loadSelectedDetail(false);
   } else {
@@ -150,14 +153,17 @@ async function refreshEntriesAfterWrite(changedEntryId?: string | null): Promise
 async function lockVault(): Promise<void> {
   state.activeSession = null;
   state.activeEntries = [];
+  state.visibleEntries = [];
+  state.groups = [];
+  state.selectedGroupPath = null;
   state.activeView = "browse";
   clearSelection(state);
   clearClipboardTimer();
   clearPasswordInput();
   renderAppChrome();
+  renderGroupTree(state, [], selectGroup);
   renderEntryList(state, [], selectEntry);
   renderEmptyDetail("Select an entry to view details.");
-  renderGroups(state, []);
   renderAudit(state, null);
   setClipboardStatus("Clipboard idle.", "neutral");
   writeReportEl().textContent = "No write action run yet.";
@@ -168,9 +174,9 @@ async function runSearch(): Promise<void> {
   await renderCommand(async () => {
     const session = requireSession(state);
     const entries = await searchEntries(session, inputValue("#search-query"));
-    state.activeEntries = entries;
+    state.visibleEntries = entries;
     clearSelection(state);
-    renderEntryList(state, entries, selectEntry);
+    renderEntryList(state, filteredEntries(), selectEntry);
     renderEmptyDetail("Select a search result to view details.");
     renderAppChrome();
     return `Search returned ${entries.length} entries.`;
@@ -179,16 +185,26 @@ async function runSearch(): Promise<void> {
 
 async function resetList(): Promise<void> {
   clearSelection(state);
-  renderEntryList(state, state.activeEntries, selectEntry);
+  state.visibleEntries = state.activeEntries;
+  renderEntryList(state, filteredEntries(), selectEntry);
   renderEmptyDetail("Select an entry to view details.");
   outputEl().textContent = `Showing ${state.activeEntries.length} entries from current in-memory list.`;
+  renderAppChrome();
+}
+
+function selectGroup(groupPath: string | null): void {
+  state.selectedGroupPath = groupPath;
+  clearSelection(state);
+  renderGroupTree(state, state.groups, selectGroup);
+  renderEntryList(state, filteredEntries(), selectEntry);
+  renderEmptyDetail("Select an entry to view details.");
   renderAppChrome();
 }
 
 function selectEntry(entryId: string): void {
   state.selectedEntryId = entryId;
   state.detailRevealed = false;
-  renderEntryList(state, state.activeEntries, selectEntry);
+  renderEntryList(state, filteredEntries(), selectEntry);
   void loadSelectedDetail(false);
 }
 
@@ -228,6 +244,20 @@ async function copySelectedTotp(): Promise<void> {
   await copyWithOwnedClear(code.code, `TOTP code valid for ${code.valid_for_seconds}s`);
 }
 
+function detailActions() {
+  return {
+    copyUsername: copySelectedUsername,
+    copyPassword: copySelectedPassword,
+    copyUrl: copySelectedUrl,
+    copyTotp: copySelectedTotp,
+    revealPassword: revealSelectedDetail,
+  };
+}
+
+function filteredEntries() {
+  return filterEntriesForSelectedGroup(state, state.visibleEntries);
+}
+
 async function loadSelectedDetail(revealPassword: boolean): Promise<void> {
   const session = requireSession(state);
   if (!state.selectedEntryId) {
@@ -240,19 +270,11 @@ async function loadSelectedDetail(revealPassword: boolean): Promise<void> {
     const detail = await showEntry(session, "id", state.selectedEntryId, revealPassword);
     state.selectedDetail = detail;
     state.detailRevealed = revealPassword;
-    renderEntryDetail(detail, revealPassword);
+    renderEntryDetail(detail, revealPassword, detailActions());
     renderAppChrome();
   } catch (error) {
     detailEl.textContent = `Error: ${formatError(error)}`;
   }
-}
-
-async function runLoadGroups(): Promise<void> {
-  await renderCommand(async () => {
-    const groups = await listGroups(requireSession(state));
-    renderGroups(state, groups);
-    return `Loaded ${groups.length} groups.`;
-  });
 }
 
 async function runAudit(): Promise<void> {

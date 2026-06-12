@@ -1,11 +1,14 @@
-import type { EntryDetail, EntrySummary, VaultRequest } from "./api";
+import type { EntryDetail, EntrySummary, GroupSummary, VaultRequest } from "./api";
 
-export type ActiveView = "browse" | "groups" | "audit" | "write" | "status";
+export type ActiveView = "browse" | "audit" | "write" | "status";
 
 export type AppState = {
   activeView: ActiveView;
   activeSession: VaultRequest | null;
   activeEntries: EntrySummary[];
+  visibleEntries: EntrySummary[];
+  groups: GroupSummary[];
+  selectedGroupPath: string | null;
   selectedEntryId: string | null;
   selectedDetail: EntryDetail | null;
   detailRevealed: boolean;
@@ -16,6 +19,9 @@ export function createInitialState(): AppState {
     activeView: "browse",
     activeSession: null,
     activeEntries: [],
+    visibleEntries: [],
+    groups: [],
+    selectedGroupPath: null,
     selectedEntryId: null,
     selectedDetail: null,
     detailRevealed: false,

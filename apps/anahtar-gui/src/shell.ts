@@ -42,7 +42,6 @@ export function renderShell(app: HTMLDivElement): void {
           <div class="sidebar-group">
             <p class="sidebar-heading">Vault</p>
             <button id="nav-browse" class="nav-button" type="button" data-view="browse" aria-selected="true">Browse</button>
-            <button id="nav-groups" class="nav-button" type="button" data-view="groups" aria-selected="false">Groups</button>
           </div>
 
           <div class="sidebar-group">
@@ -55,6 +54,16 @@ export function renderShell(app: HTMLDivElement): void {
 
         <main class="workspace" aria-live="polite">
           <section id="view-panel-browse" class="view-panel browse-layout" data-view-panel="browse">
+            <section class="pane groups-pane">
+              <div class="pane-header">
+                <div>
+                  <h2>Groups</h2>
+                  <p class="hint">Select a group to filter entries.</p>
+                </div>
+              </div>
+              <div id="group-list" class="group-tree" aria-live="polite">Unlock first to inspect groups.</div>
+            </section>
+
             <section class="pane list-pane">
               <div class="pane-header">
                 <div>
@@ -82,29 +91,9 @@ export function renderShell(app: HTMLDivElement): void {
               </div>
               <div class="button-row compact-actions">
                 <button id="reload-detail" type="button" disabled>Reload safe detail</button>
-                <button id="reveal-detail" type="button" disabled>Reveal sensitive fields</button>
-              </div>
-              <div class="button-row compact-actions">
-                <button id="copy-username" type="button" disabled>Copy username</button>
-                <button id="copy-password" type="button" disabled>Copy password</button>
-                <button id="copy-url" type="button" disabled>Copy URL</button>
-                <button id="copy-totp" type="button" disabled>Copy TOTP</button>
               </div>
               <div id="clipboard-status" class="status neutral">Clipboard idle.</div>
               <div id="entry-detail" class="detail-output" aria-live="polite">Select an entry to view details.</div>
-            </section>
-          </section>
-
-          <section id="view-panel-groups" class="view-panel tool-layout" data-view-panel="groups" hidden>
-            <section class="pane">
-              <div class="pane-header split-header">
-                <div>
-                  <h2>Groups</h2>
-                  <p class="hint">Group list comes from anahtar-app and contains no secret values.</p>
-                </div>
-                <button id="load-groups" type="button" disabled>Load groups</button>
-              </div>
-              <div id="group-list" class="entry-list compact-list" aria-live="polite">Unlock first to inspect groups.</div>
             </section>
           </section>
 

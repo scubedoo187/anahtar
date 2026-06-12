@@ -10,8 +10,16 @@ import {
 import type { ActiveView, AppState } from "./state";
 
 export type EntrySelectHandler = (entryId: string) => void;
+export type GroupSelectHandler = (groupPath: string | null) => void;
+export type DetailActionHandlers = {
+  copyUsername: () => Promise<void>;
+  copyPassword: () => Promise<void>;
+  copyUrl: () => Promise<void>;
+  copyTotp: () => Promise<void>;
+  revealPassword: () => Promise<void>;
+};
 
-const activeViews: ActiveView[] = ["browse", "groups", "audit", "write", "status"];
+const activeViews: ActiveView[] = ["browse", "audit", "write", "status"];
 
 export function renderNavigationState(state: AppState): void {
   for (const view of activeViews) {
@@ -28,7 +36,6 @@ export function renderNavigationState(state: AppState): void {
     }
   }
 }
-
 
 export function renderSessionState(state: AppState): void {
   const unlocked = state.activeSession !== null;
@@ -48,13 +55,6 @@ export function renderSessionState(state: AppState): void {
   setDisabled("#search-entries", !unlocked);
   setDisabled("#reset-list", !unlocked);
   setDisabled("#reload-detail", !unlocked || !state.selectedEntryId);
-  setDisabled("#reveal-detail", !unlocked || !state.selectedEntryId || state.detailRevealed);
-  setDisabled("#copy-username", !unlocked || !state.selectedDetail?.username);
-  setDisabled("#copy-password", !unlocked || !state.selectedEntryId);
-  setDisabled("#copy-url", !unlocked || !state.selectedDetail?.url);
-  setDisabled("#copy-totp", !unlocked || !state.selectedEntryId);
-  setDisabled("#load-groups", !unlocked);
-  setDisabled("#run-audit", !unlocked);
   setDisabled("#backup-dir", !unlocked);
   setDisabled("#add-group", !unlocked);
   setDisabled("#add-title", !unlocked);
@@ -70,6 +70,7 @@ export function renderSessionState(state: AppState): void {
   setDisabled("#edit-notes", !unlocked || !state.selectedEntryId);
   setDisabled("#edit-entry", !unlocked || !state.selectedEntryId);
   setDisabled("#delete-entry", !unlocked || !state.selectedEntryId);
+  setDisabled("#run-audit", !unlocked);
 
   const status = document.querySelector<HTMLDivElement>("#session-status");
   if (!status) return;
@@ -79,6 +80,48 @@ export function renderSessionState(state: AppState): void {
   } else {
     status.className = "status locked";
     status.textContent = "Locked";
+  }
+}
+
+export function renderGroupTree(
+  state: AppState,
+  groups: GroupSummary[],
+  onSelect: GroupSelectHandler,
+): void {
+  const list = groupListEl();
+  list.textContent = "";
+
+  if (!state.activeSession) {
+    list.textContent = "Unlock first to inspect groups.";
+    return;
+  }
+
+  list.append(groupTreeButton("All Entries", null, state.selectedGroupPath === null, 0, onSelect));
+
+  if (groups.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "muted";
+    empty.textContent = "No groups loaded.";
+    list.append(empty);
+    return;
+  }
+
+  for (const group of groups) {
+    const normalizedPath = normalizeGroupPath(group.path);
+    if (!normalizedPath) continue;
+    const depth = normalizedPath.split("/").length - 1;
+    const label = group.name || normalizedPath.split("/").pop() || normalizedPath;
+    const button = groupTreeButton(
+      label,
+      normalizedPath,
+      state.selectedGroupPath === normalizedPath,
+      depth,
+      onSelect,
+    );
+    const meta = document.createElement("span");
+    meta.textContent = `${group.entry_count} entries`;
+    button.append(meta);
+    list.append(button);
   }
 }
 
@@ -120,7 +163,11 @@ export function renderEntryList(
   }
 }
 
-export function renderEntryDetail(detail: EntryDetail, revealPassword: boolean): void {
+export function renderEntryDetail(
+  detail: EntryDetail,
+  revealPassword: boolean,
+  actions: DetailActionHandlers,
+): void {
   const detailEl = detailOutputEl();
   detailEl.textContent = "";
 
@@ -128,10 +175,14 @@ export function renderEntryDetail(detail: EntryDetail, revealPassword: boolean):
     detailLine("ID", detail.id),
     detailLine("Group", detail.group_path),
     detailLine("Title", detail.title ?? ""),
-    detailLine("Username", detail.username ?? ""),
-    detailLine("URL", detail.url ?? ""),
+    detailLine("Username", detail.username ?? "", [fieldButton("Copy", actions.copyUsername, !detail.username)]),
+    detailLine("Password", revealPassword ? (detail.password ?? "") : "<hidden>", [
+      fieldButton("Copy", actions.copyPassword, false),
+      fieldButton("Reveal", actions.revealPassword, revealPassword),
+    ]),
+    detailLine("URL", detail.url ?? "", [fieldButton("Copy", actions.copyUrl, !detail.url)]),
+    detailLine("TOTP", "one-time code", [fieldButton("Copy code", actions.copyTotp, false)]),
     detailLine("Notes", detail.notes ?? ""),
-    detailLine("Password", revealPassword ? (detail.password ?? "") : "<hidden>"),
     detailLine("Sensitive fields", revealPassword ? "revealed by explicit action" : "hidden"),
   );
 
@@ -154,32 +205,6 @@ export function renderEntryDetail(detail: EntryDetail, revealPassword: boolean):
 
 export function renderEmptyDetail(message: string): void {
   detailOutputEl().textContent = message;
-}
-
-export function renderGroups(state: AppState, groups: GroupSummary[]): void {
-  const list = groupListEl();
-  list.textContent = "";
-
-  if (!state.activeSession) {
-    list.textContent = "Unlock first to inspect groups.";
-    return;
-  }
-
-  if (groups.length === 0) {
-    list.textContent = "No groups loaded.";
-    return;
-  }
-
-  for (const group of groups) {
-    const item = document.createElement("div");
-    item.className = "group-row";
-    const title = document.createElement("strong");
-    title.textContent = group.path;
-    const meta = document.createElement("span");
-    meta.textContent = `${group.entry_count} entries · ${group.child_group_count} child groups`;
-    item.append(title, meta);
-    list.append(item);
-  }
 }
 
 export function renderAudit(state: AppState, report: AuditReport | null): void {
@@ -229,6 +254,41 @@ export function renderWriteReport(report: WriteReport): string {
   ].join("\n");
 }
 
+export function normalizeGroupPath(path: string): string {
+  return path.replace(/^Root\/?/, "").replace(/^\/+|\/+$/g, "");
+}
+
+function entryMatchesGroup(entry: EntrySummary, selectedGroupPath: string | null): boolean {
+  if (!selectedGroupPath) {
+    return true;
+  }
+  const entryPath = normalizeGroupPath(entry.group_path);
+  return entryPath === selectedGroupPath || entryPath.startsWith(`${selectedGroupPath}/`);
+}
+
+export function filterEntriesForSelectedGroup(state: AppState, entries: EntrySummary[]): EntrySummary[] {
+  return entries.filter((entry) => entryMatchesGroup(entry, state.selectedGroupPath));
+}
+
+function groupTreeButton(
+  label: string,
+  groupPath: string | null,
+  selected: boolean,
+  depth: number,
+  onSelect: GroupSelectHandler,
+): HTMLButtonElement {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = selected ? "group-tree-row selected" : "group-tree-row";
+  button.style.setProperty("--depth", String(depth));
+  button.addEventListener("click", () => onSelect(groupPath));
+
+  const title = document.createElement("strong");
+  title.textContent = label;
+  button.append(title);
+  return button;
+}
+
 function vaultName(path?: string): string {
   if (!path) {
     return "vault";
@@ -236,9 +296,21 @@ function vaultName(path?: string): string {
   return path.split(/[\\/]/).filter(Boolean).pop() ?? path;
 }
 
-export function detailLine(label: string, value: string): HTMLDivElement {
+function fieldButton(label: string, action: () => Promise<void>, disabled: boolean): HTMLButtonElement {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "field-action";
+  button.textContent = label;
+  button.disabled = disabled;
+  button.addEventListener("click", () => {
+    void action();
+  });
+  return button;
+}
+
+export function detailLine(label: string, value: string, actions: HTMLElement[] = []): HTMLDivElement {
   const row = document.createElement("div");
-  row.className = "detail-line";
+  row.className = actions.length > 0 ? "detail-line detail-line-with-actions" : "detail-line";
 
   const labelEl = document.createElement("span");
   labelEl.className = "detail-label";
@@ -249,5 +321,11 @@ export function detailLine(label: string, value: string): HTMLDivElement {
   valueEl.textContent = value;
 
   row.append(labelEl, valueEl);
+  if (actions.length > 0) {
+    const actionsEl = document.createElement("span");
+    actionsEl.className = "detail-actions";
+    actionsEl.append(...actions);
+    row.append(actionsEl);
+  }
   return row;
 }
