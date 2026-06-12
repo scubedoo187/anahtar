@@ -1,4 +1,4 @@
-export const defaultVaultPath = "../../test-vaults/generated/phase3-base.kdbx";
+export const defaultVaultPath = "../../../test-vaults/generated/phase3-base.kdbx";
 
 export function renderShell(app: HTMLDivElement): void {
   // Static shell only: do not interpolate vault, entry, or secret data into this template.
