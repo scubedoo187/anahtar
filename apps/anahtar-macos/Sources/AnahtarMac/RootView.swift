@@ -211,10 +211,6 @@ struct EntryListView: View {
             Divider()
             HStack(spacing: 8) {
                 Button("＋") { model.prepareAddEntry() }
-                Button("✎") { model.prepareEditEntry() }
-                    .disabled(model.selectedEntryID == nil)
-                Button("⌫") { model.deleteSelectedEntry() }
-                    .disabled(model.selectedEntryID == nil)
                 Spacer()
             }
             .buttonStyle(.borderless)
@@ -390,9 +386,18 @@ struct EntryDetailView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             if let detail = model.selectedDetail {
-                Text(detail.title ?? "<untitled>")
-                    .font(.title2)
-                    .fontWeight(.semibold)
+                HStack {
+                    Text(detail.title ?? "<untitled>")
+                        .font(.title2)
+                        .fontWeight(.semibold)
+                    Spacer()
+                    Button("✎") { model.prepareEditEntry() }
+                        .buttonStyle(.borderless)
+                        .help("Edit entry")
+                    Button("⌫") { model.deleteSelectedEntry() }
+                        .buttonStyle(.borderless)
+                        .help("Delete entry")
+                }
                 detailRow("ID", detail.id)
                 detailRow("Group", detail.group_path)
                 detailRow("Username", detail.username ?? "") {
