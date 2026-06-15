@@ -4,9 +4,7 @@ struct RootView: View {
     @EnvironmentObject private var model: AppModel
 
     var body: some View {
-        VStack(spacing: 0) {
-            topBar
-            Divider()
+        Group {
             if model.unlocked {
                 splitView
             } else {
@@ -16,7 +14,7 @@ struct RootView: View {
         .overlay(alignment: .topTrailing) {
             if let toast = model.toastMessage {
                 ToastView(message: toast)
-                    .padding(.top, 46)
+                    .padding(.top, 16)
                     .padding(.trailing, 16)
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
@@ -26,21 +24,6 @@ struct RootView: View {
                 .environmentObject(model)
         }
         .animation(.easeOut(duration: 0.18), value: model.toastMessage)
-    }
-
-    private var topBar: some View {
-        HStack(spacing: 12) {
-            Text("Anahtar")
-                .font(.headline)
-            Spacer()
-            if model.unlocked {
-                Button("Audit") { model.runAudit() }
-                Button("Refresh") { model.refresh() }
-                Button("Lock") { model.lockVault() }
-            }
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
     }
 
     private var splitView: some View {
@@ -157,23 +140,31 @@ struct GroupListView: View {
     @EnvironmentObject private var model: AppModel
 
     var body: some View {
-        List(selection: $model.selectedGroupSelection) {
-            Text("All Entries (\(model.entries.count))")
-                .tag(GroupSelection.allEntries)
-            ForEach(model.groups.compactMap { groupView($0) }, id: \.path) { group in
-                Text("\(group.name) (\(group.count))")
-                    .padding(.leading, CGFloat(group.depth * 10))
-                    .tag(GroupSelection.group(group.path))
+        VStack(spacing: 0) {
+            HStack(spacing: 8) {
+                Text("Groups")
+                    .font(.headline)
+                Spacer()
+                Button("＋") { model.addGroupPrompt() }
+                    .help("Add group")
+                Button("Rename") { model.renameSelectedGroupPrompt() }
+                    .disabled(model.selectedGroup == nil)
+                Button("Delete") { model.deleteSelectedGroup() }
+                    .disabled(model.selectedGroup == nil)
             }
-        }
-        .listStyle(.sidebar)
-        .navigationTitle("Groups")
-        .toolbar {
-            Button("＋") { model.addGroupPrompt() }
-            Button("✎") { model.renameSelectedGroupPrompt() }
-                .disabled(model.selectedGroup == nil)
-            Button("⌫") { model.deleteSelectedGroup() }
-                .disabled(model.selectedGroup == nil)
+            .buttonStyle(.borderless)
+            .padding(8)
+            Divider()
+            List(selection: $model.selectedGroupSelection) {
+                Text("All Entries (\(model.entries.count))")
+                    .tag(GroupSelection.allEntries)
+                ForEach(model.groups.compactMap { groupView($0) }, id: \.path) { group in
+                    Text("\(group.name) (\(group.count))")
+                        .padding(.leading, CGFloat(group.depth * 10))
+                        .tag(GroupSelection.group(group.path))
+                }
+            }
+            .listStyle(.sidebar)
         }
     }
 

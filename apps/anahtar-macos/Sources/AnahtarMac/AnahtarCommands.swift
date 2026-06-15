@@ -11,6 +11,9 @@ struct AnahtarCommands: Commands {
                 .keyboardShortcut("l", modifiers: [.command])
             Button("Refresh") { model.refresh() }
                 .keyboardShortcut("r", modifiers: [.command])
+            Button("Run Audit") { model.runAudit() }
+                .keyboardShortcut("a", modifiers: [.command, .shift])
+                .disabled(!model.unlocked)
         }
         CommandGroup(after: .textEditing) {
             Button("Focus Search") { model.focusSearch() }
