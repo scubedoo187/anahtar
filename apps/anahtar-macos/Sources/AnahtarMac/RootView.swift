@@ -187,6 +187,7 @@ struct GroupListView: View {
 }
 struct EntryListView: View {
     @EnvironmentObject private var model: AppModel
+    @FocusState private var searchFocused: Bool
 
     var body: some View {
         VStack(spacing: 0) {
@@ -194,6 +195,7 @@ struct EntryListView: View {
                 ZStack(alignment: .trailing) {
                     TextField("Search entries", text: $model.searchQuery)
                         .textFieldStyle(.roundedBorder)
+                        .focused($searchFocused)
                         .onSubmit { model.search() }
                         .onChange(of: model.searchQuery) { _ in model.updateSearchResults() }
                     if !model.searchQuery.isEmpty {
@@ -226,6 +228,9 @@ struct EntryListView: View {
                     }
                 }
             }
+        }
+        .onChange(of: model.searchFocusRequest) { _ in
+            searchFocused = true
         }
         .sheet(isPresented: $model.showAddEntrySheet) {
             AddEntrySheet()

@@ -57,6 +57,7 @@ final class AppModel: ObservableObject {
     @Published var selectedDetail: EntryDetail? = nil
     @Published var detailRevealed = false
     @Published var searchQuery = ""
+    @Published var searchFocusRequest = 0
     @Published var showAddEntrySheet = false
     @Published var showEditEntrySheet = false
     @Published var newEntryGroup = "General/Web"
@@ -489,7 +490,8 @@ final class AppModel: ObservableObject {
     }
 
     func focusSearch() {
-        statusMessage = "Use the search field in the Entries pane."
+        guard unlocked else { return }
+        searchFocusRequest += 1
     }
 
     func lockVault() {
