@@ -248,6 +248,16 @@ struct EntryListView: View {
                         .focused($searchFocused)
                         .onSubmit { model.search() }
                         .onChange(of: model.searchQuery) { _ in model.updateSearchResults() }
+                        .onMoveCommand { direction in
+                            switch direction {
+                            case .down:
+                                moveFocusFromSearchToList(delta: 1)
+                            case .up:
+                                moveFocusFromSearchToList(delta: -1)
+                            default:
+                                break
+                            }
+                        }
                     if !model.searchQuery.isEmpty {
                         Button {
                             model.resetList()
@@ -316,6 +326,12 @@ struct EntryListView: View {
             EditEntrySheet()
                 .environmentObject(model)
         }
+    }
+
+    private func moveFocusFromSearchToList(delta: Int) {
+        searchFocused = false
+        listFocused = true
+        model.selectAdjacentEntry(delta: delta)
     }
 
     private func entryRow(_ entry: EntrySummary) -> some View {
