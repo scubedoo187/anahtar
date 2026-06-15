@@ -13,15 +13,21 @@ struct RootView: View {
                 UnlockView()
             }
         }
+        .overlay(alignment: .topTrailing) {
+            if let toast = model.toastMessage {
+                ToastView(message: toast)
+                    .padding(.top, 46)
+                    .padding(.trailing, 16)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .animation(.easeOut(duration: 0.18), value: model.toastMessage)
     }
 
     private var topBar: some View {
         HStack(spacing: 12) {
             Text("Anahtar")
                 .font(.headline)
-            Text(model.statusMessage)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
             Spacer()
             if model.unlocked {
                 Button("Audit") { model.runAudit() }
@@ -45,6 +51,27 @@ struct RootView: View {
         }
     }
 
+}
+
+
+struct ToastView: View {
+    let message: String
+
+    var body: some View {
+        Text(message)
+            .font(.callout)
+            .lineLimit(3)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .frame(maxWidth: 420, alignment: .leading)
+            .background(.regularMaterial)
+            .overlay {
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(Color(nsColor: .separatorColor), lineWidth: 1)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .shadow(radius: 8, y: 3)
+    }
 }
 
 struct UnlockView: View {
@@ -197,7 +224,7 @@ struct EntryListView: View {
                 }
             }
         }
-        .navigationTitle("Entries")
+        .navigationTitle("Anahtar")
         .sheet(isPresented: $model.showAddEntrySheet) {
             AddEntrySheet()
                 .environmentObject(model)

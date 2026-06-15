@@ -14,7 +14,14 @@ struct RecentVault: Codable, Identifiable, Hashable {
 
 @MainActor
 final class AppModel: ObservableObject {
-    @Published var statusMessage = "Native macOS scaffold ready."
+    @Published var statusMessage = "Native macOS scaffold ready." {
+        didSet {
+            if statusMessage != oldValue {
+                showToast(statusMessage)
+            }
+        }
+    }
+    @Published var toastMessage: String? = nil
     @Published var vaultPath = ""
     @Published var keyFilePath = ""
     @Published var masterPassword = ""
@@ -53,6 +60,7 @@ final class AppModel: ObservableObject {
     private static let recentVaultsKey = "AnahtarRecentVaults"
     private let backend = BackendBridge()
     private var sessionPassword = ""
+    private var toastDismissTask: Task<Void, Never>?
 
     init() {
         loadRecentVaults()
@@ -70,6 +78,23 @@ final class AppModel: ObservableObject {
             guard let selectedGroup else { return true }
             let entryPath = normalizeGroupPath(entry.group_path)
             return entryPath == selectedGroup || entryPath.hasPrefix("\(selectedGroup)/")
+        }
+    }
+
+
+    private func showToast(_ message: String) {
+        let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        toastDismissTask?.cancel()
+        toastMessage = trimmed
+        toastDismissTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                if self?.toastMessage == trimmed {
+                    self?.toastMessage = nil
+                }
+            }
         }
     }
 
@@ -460,6 +485,8 @@ final class AppModel: ObservableObject {
         selectedDetail = nil
         detailRevealed = false
         clearClipboardTimer()
+        toastDismissTask?.cancel()
+        toastDismissTask = nil
         statusMessage = "Locked. In-memory session cleared."
     }
 
