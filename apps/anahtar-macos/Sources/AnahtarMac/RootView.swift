@@ -191,12 +191,24 @@ struct EntryListView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                TextField("Search entries", text: $model.searchQuery)
-                    .textFieldStyle(.roundedBorder)
-                    .onSubmit { model.search() }
-                    .onChange(of: model.searchQuery) { _ in model.updateSearchResults() }
+                ZStack(alignment: .trailing) {
+                    TextField("Search entries", text: $model.searchQuery)
+                        .textFieldStyle(.roundedBorder)
+                        .onSubmit { model.search() }
+                        .onChange(of: model.searchQuery) { _ in model.updateSearchResults() }
+                    if !model.searchQuery.isEmpty {
+                        Button {
+                            model.resetList()
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .help("Clear search")
+                        .padding(.trailing, 6)
+                    }
+                }
                 Button("Search") { model.search() }
-                Button("Reset") { model.resetList() }
             }
             .padding(8)
             Divider()
