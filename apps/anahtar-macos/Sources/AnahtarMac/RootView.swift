@@ -42,18 +42,52 @@ struct RootView: View {
 
 
 
-private extension View {
-    @ViewBuilder
-    func onReturnKeyCompat(_ action: @escaping () -> Void) -> some View {
-        if #available(macOS 14.0, *) {
-            self.onKeyPress(.return) {
-                action()
-                return .handled
+private struct KeyboardCaptureView: NSViewRepresentable {
+    @Binding var active: Bool
+    let handler: (NSEvent) -> Bool
+
+    func makeNSView(context: Context) -> KeyView {
+        let view = KeyView()
+        view.handler = handler
+        view.onResign = { active = false }
+        return view
+    }
+
+    func updateNSView(_ nsView: KeyView, context: Context) {
+        nsView.handler = handler
+        nsView.onResign = { active = false }
+        if active, nsView.window?.firstResponder !== nsView {
+            DispatchQueue.main.async {
+                nsView.window?.makeFirstResponder(nsView)
             }
-        } else {
-            self
         }
     }
+
+    final class KeyView: NSView {
+        var handler: ((NSEvent) -> Bool)?
+        var onResign: (() -> Void)?
+
+        override var acceptsFirstResponder: Bool { true }
+
+        override func resignFirstResponder() -> Bool {
+            onResign?()
+            return super.resignFirstResponder()
+        }
+
+        override func keyDown(with event: NSEvent) {
+            if handler?(event) == true {
+                return
+            }
+            super.keyDown(with: event)
+        }
+    }
+}
+
+private enum KeyCode {
+    static let `return`: UInt16 = 36
+    static let keypadEnter: UInt16 = 76
+    static let arrowUp: UInt16 = 126
+    static let arrowDown: UInt16 = 125
 }
 
 struct ToastView: View {
@@ -203,7 +237,7 @@ struct GroupListView: View {
 struct EntryListView: View {
     @EnvironmentObject private var model: AppModel
     @FocusState private var searchFocused: Bool
-    @FocusState private var listFocused: Bool
+    @State private var listFocused = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -245,24 +279,34 @@ struct EntryListView: View {
                 }
             }
             .focusable(true)
-            .focused($listFocused)
-            .onMoveCommand { direction in
-                switch direction {
-                case .up:
-                    model.selectAdjacentEntry(delta: -1)
-                case .down:
-                    model.selectAdjacentEntry(delta: 1)
-                default:
-                    break
+            .background(
+                KeyboardCaptureView(active: $listFocused) { event in
+                    switch event.keyCode {
+                    case KeyCode.arrowUp:
+                        model.selectAdjacentEntry(delta: -1)
+                        return true
+                    case KeyCode.arrowDown:
+                        model.selectAdjacentEntry(delta: 1)
+                        return true
+                    case KeyCode.return, KeyCode.keypadEnter:
+                        model.openSelectedEntryDetail()
+                        return true
+                    default:
+                        return false
+                    }
                 }
-            }
-            .onReturnKeyCompat {
-                model.openSelectedEntryDetail()
-            }
+                .frame(width: 0, height: 0)
+            )
         }
         .onAppear { listFocused = true }
         .onChange(of: model.searchFocusRequest) { _ in
+            listFocused = false
             searchFocused = true
+        }
+        .onChange(of: searchFocused) { focused in
+            if focused {
+                listFocused = false
+            }
         }
         .sheet(isPresented: $model.showAddEntrySheet) {
             AddEntrySheet()
@@ -436,7 +480,7 @@ struct DetailAttributeRow<Actions: View>: View {
     let value: String
     let copy: () -> Void
     let actions: Actions
-    @FocusState private var focused: Bool
+    @State private var focused = false
 
     init(label: String, value: String, copy: @escaping () -> Void, @ViewBuilder actions: () -> Actions) {
         self.label = label
@@ -464,11 +508,20 @@ struct DetailAttributeRow<Actions: View>: View {
             .background(focused ? Color.accentColor.opacity(0.14) : Color.clear)
             .contentShape(Rectangle())
             .focusable(true)
-            .focused($focused)
+            .onTapGesture(count: 1) { focused = true }
             .onTapGesture(count: 2) { copy() }
-            .onReturnKeyCompat {
-                copy()
-            }
+            .background(
+                KeyboardCaptureView(active: $focused) { event in
+                    switch event.keyCode {
+                    case KeyCode.return, KeyCode.keypadEnter:
+                        copy()
+                        return true
+                    default:
+                        return false
+                    }
+                }
+                .frame(width: 0, height: 0)
+            )
             Divider()
         }
     }
