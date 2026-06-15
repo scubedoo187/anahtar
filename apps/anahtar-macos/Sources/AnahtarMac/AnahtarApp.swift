@@ -9,6 +9,7 @@ struct AnahtarApp: App {
             RootView()
                 .environmentObject(model)
                 .frame(minWidth: 900, minHeight: 600)
+                .task { model.refreshBackendStatus() }
         }
         .commands {
             AnahtarCommands(model: model)

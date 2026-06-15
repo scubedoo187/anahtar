@@ -1,6 +1,6 @@
 # Phase 7 — Native macOS Transition Plan
 
-Status: proposed before Phase 8 packaging
+Status: native transition scaffold implemented through N6; Tauri retained until native parity review
 
 ## Decision
 
@@ -159,13 +159,13 @@ Potential later upgrade:
 
 ## Steps
 
-- [ ] Slice N1 — Create native macOS project scaffold.
-- [ ] Slice N2 — Add Rust FFI bridge scaffold and backend status call.
-- [ ] Slice N3 — Implement native unlock/list/search/show using the FFI bridge.
-- [ ] Slice N4 — Implement clipboard/TOTP/reveal behavior natively.
-- [ ] Slice N5 — Implement writes/groups/audit through Rust backend only.
-- [ ] Slice N6 — Replace packaging path with native `.app` build/archive documentation.
-- [ ] Decide when to deprecate or remove the Tauri GUI after native parity is reached.
+- [x] Slice N1 — Create native macOS project scaffold.
+- [x] Slice N2 — Add Rust FFI bridge scaffold and backend status call.
+- [x] Slice N3 — Implement native unlock/list/search/show using the FFI bridge.
+- [x] Slice N4 — Implement clipboard/TOTP/reveal behavior natively.
+- [x] Slice N5 — Implement writes/groups/audit through Rust backend only.
+- [x] Slice N6 — Replace packaging path with native `.app` build/archive documentation.
+- [x] Decide when to deprecate or remove the Tauri GUI after native parity is reached. Decision: keep Tauri as a reference alpha until the native app completes manual parity smoke for unlock/list/show/copy/write/group/audit, then deprecate it in docs before removal.
 
 ## Migration slices
 

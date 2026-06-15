@@ -5,7 +5,7 @@ struct AnahtarCommands: Commands {
 
     var body: some Commands {
         CommandGroup(after: .newItem) {
-            Button("Open Vault…") { model.openVault() }
+            Button("Open Vault…") { model.chooseVault() }
                 .keyboardShortcut("o", modifiers: [.command])
             Button("Lock Vault") { model.lockVault() }
                 .keyboardShortcut("l", modifiers: [.command])

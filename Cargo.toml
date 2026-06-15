@@ -3,6 +3,7 @@ members = [
     "crates/anahtar-core",
     "crates/anahtar-app",
     "crates/anahtar-cli",
+    "crates/anahtar-ffi",
 ]
 exclude = [
     "spikes/keepass-compat",

@@ -7,14 +7,10 @@ struct RootView: View {
         VStack(spacing: 0) {
             topBar
             Divider()
-            NavigationSplitView {
-                GroupListView()
-                    .navigationSplitViewColumnWidth(min: 180, ideal: 220)
-            } content: {
-                EntryListView()
-                    .navigationSplitViewColumnWidth(min: 240, ideal: 300)
-            } detail: {
-                EntryDetailView()
+            if model.unlocked {
+                splitView
+            } else {
+                UnlockView()
             }
         }
     }
@@ -27,11 +23,69 @@ struct RootView: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
             Spacer()
-            Button("Open Vault…") { model.openVault() }
-            Button("Lock") { model.lockVault() }
+            if model.unlocked {
+                Button("Audit") { model.runAudit() }
+                Button("Refresh") { model.refresh() }
+                Button("Lock") { model.lockVault() }
+            }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
+    }
+
+    private var splitView: some View {
+        NavigationSplitView {
+            GroupListView()
+                .navigationSplitViewColumnWidth(min: 180, ideal: 220)
+        } content: {
+            EntryListView()
+                .navigationSplitViewColumnWidth(min: 240, ideal: 300)
+        } detail: {
+            EntryDetailView()
+        }
+    }
+}
+
+struct UnlockView: View {
+    @EnvironmentObject private var model: AppModel
+    @FocusState private var passwordFocused: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Anahtar")
+                .font(.largeTitle)
+                .fontWeight(.bold)
+            Text("Choose a KDBX vault and enter its master password for this in-memory session.")
+                .foregroundStyle(.secondary)
+
+            LabeledContent("Vault") {
+                HStack {
+                    TextField("Vault path", text: $model.vaultPath)
+                    Button("Choose…") { model.chooseVault() }
+                }
+            }
+            LabeledContent("Key file") {
+                HStack {
+                    TextField("Optional key-file path", text: $model.keyFilePath)
+                    Button("Choose…") { model.chooseKeyFile() }
+                }
+            }
+            LabeledContent("Password") {
+                SecureField("Master password", text: $model.masterPassword)
+                    .focused($passwordFocused)
+                    .onSubmit { model.unlockVault() }
+            }
+            HStack {
+                Button("Unlock") { model.unlockVault() }
+                    .keyboardShortcut(.return, modifiers: [])
+                Button("Backend Status") { model.refreshBackendStatus() }
+            }
+        }
+        .textFieldStyle(.roundedBorder)
+        .padding(24)
+        .frame(maxWidth: 720)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .onAppear { passwordFocused = true }
     }
 }
 
@@ -40,12 +94,38 @@ struct GroupListView: View {
 
     var body: some View {
         List(selection: $model.selectedGroup) {
-            ForEach(model.placeholderGroups, id: \.self) { group in
-                Text(group)
-                    .tag(group == "All Entries" ? nil : Optional(group))
+            Text("All Entries (\(model.entries.count))")
+                .tag(String?.none)
+            ForEach(model.groups.map { groupView($0) }, id: \.path) { group in
+                Text("\(group.name) (\(group.count))")
+                    .padding(.leading, CGFloat(group.depth * 12))
+                    .tag(Optional(group.path))
             }
         }
         .navigationTitle("Groups")
+        .toolbar {
+            Button("＋") { model.addGroupPrompt() }
+            Button("✎") { model.renameSelectedGroupPrompt() }
+                .disabled(model.selectedGroup == nil)
+            Button("⌫") { model.deleteSelectedGroup() }
+                .disabled(model.selectedGroup == nil)
+        }
+    }
+
+    private func groupView(_ group: GroupSummary) -> (path: String, name: String, depth: Int, count: Int) {
+        let path = normalizeGroupPath(group.path)
+        let name = group.name.isEmpty ? path.split(separator: "/").last.map(String.init) ?? path : group.name
+        let depth = max(path.split(separator: "/").count - 1, 0)
+        let count = model.entries.filter { entry in
+            let entryPath = normalizeGroupPath(entry.group_path)
+            return entryPath == path || entryPath.hasPrefix("\(path)/")
+        }.count
+        return (path, name, depth, count)
+    }
+
+    private func normalizeGroupPath(_ path: String) -> String {
+        path.replacingOccurrences(of: "^Root/?", with: "", options: .regularExpression)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
     }
 }
 
@@ -53,19 +133,68 @@ struct EntryListView: View {
     @EnvironmentObject private var model: AppModel
 
     var body: some View {
-        List(selection: $model.selectedEntryID) {
-            ForEach(model.placeholderEntries, id: \.self) { entry in
-                VStack(alignment: .leading) {
-                    Text(entry)
-                    Text(model.selectedGroup ?? "All Entries")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+        VStack(spacing: 0) {
+            HStack {
+                TextField("Search entries", text: $model.searchQuery)
+                    .textFieldStyle(.roundedBorder)
+                    .onSubmit { model.search() }
+                Button("Search") { model.search() }
+                Button("Reset") { model.resetList() }
+            }
+            .padding(8)
+            Divider()
+            List(selection: $model.selectedEntryID) {
+                ForEach(model.filteredEntries) { entry in
+                    VStack(alignment: .leading) {
+                        Text(entry.title ?? "<untitled>")
+                            .fontWeight(.semibold)
+                        Text("\(entry.group_path) · \(entry.username ?? "") · \(entry.url ?? "")")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                    .tag(Optional(entry.id))
                 }
-                .tag(Optional(entry))
             }
         }
         .navigationTitle("Entries")
-        .searchable(text: .constant(""), prompt: "Search entries")
+        .toolbar {
+            Button("＋") { model.prepareAddEntry() }
+            Button("⌫") { model.deleteSelectedEntry() }
+                .disabled(model.selectedEntryID == nil)
+        }
+        .sheet(isPresented: $model.showAddEntrySheet) {
+            AddEntrySheet()
+                .environmentObject(model)
+        }
+    }
+}
+
+
+struct AddEntrySheet: View {
+    @EnvironmentObject private var model: AppModel
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("New Entry")
+                .font(.title2)
+                .fontWeight(.semibold)
+            TextField("Group path", text: $model.newEntryGroup)
+            TextField("Title", text: $model.newEntryTitle)
+            TextField("Username", text: $model.newEntryUsername)
+            SecureField("Password", text: $model.newEntryPassword)
+            TextField("URL", text: $model.newEntryURL)
+            TextField("Notes", text: $model.newEntryNotes)
+            HStack {
+                Button("Save") { model.saveNewEntry() }
+                    .keyboardShortcut(.return, modifiers: [])
+                Button("Cancel") { dismiss() }
+            }
+        }
+        .textFieldStyle(.roundedBorder)
+        .padding(20)
+        .frame(width: 460)
     }
 }
 
@@ -74,18 +203,45 @@ struct EntryDetailView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            if let selectedEntryID = model.selectedEntryID {
-                Text(selectedEntryID)
+            if let detail = model.selectedDetail {
+                Text(detail.title ?? "<untitled>")
                     .font(.title2)
                     .fontWeight(.semibold)
-                LabeledContent("Group", value: model.selectedGroup ?? "General/Web")
-                LabeledContent("Username", value: "Hidden until Rust bridge is connected")
-                LabeledContent("Password", value: "<hidden>")
+                LabeledContent("ID", value: detail.id)
+                LabeledContent("Group", value: detail.group_path)
+                LabeledContent("Username", value: detail.username ?? "")
+                LabeledContent("Password", value: model.detailRevealed ? (detail.password ?? "") : "<hidden>")
+                LabeledContent("URL", value: detail.url ?? "")
+                LabeledContent("TOTP", value: detail.has_totp ? "one-time code available" : "No TOTP code available")
+                LabeledContent("Notes", value: detail.notes ?? "")
                 HStack {
-                    Button("Copy Username") {}
-                    Button("Reveal Password") {}
-                    Button("Copy TOTP") {}
-                        .disabled(true)
+                    Button("Copy Username") { model.copyUsername() }
+                        .disabled((detail.username ?? "").isEmpty)
+                    Button("Copy Password") { model.copyPassword() }
+                    Button(model.detailRevealed ? "Hide Password" : "Reveal Password") {
+                        model.toggleRevealPassword()
+                    }
+                    Button("Copy URL") { model.copyURL() }
+                        .disabled((detail.url ?? "").isEmpty)
+                    Button("Copy TOTP") { model.copyTotp() }
+                        .disabled(!detail.has_totp)
+                }
+                if !model.auditFindings.isEmpty {
+                    Divider()
+                    Text("Audit findings")
+                        .font(.headline)
+                    ForEach(model.auditFindings.prefix(8)) { finding in
+                        Text("\(finding.kind): \(finding.title ?? finding.entry_id) — \(finding.message)")
+                            .font(.caption)
+                    }
+                }
+                if !detail.custom_fields.isEmpty {
+                    Divider()
+                    Text("Custom fields")
+                        .font(.headline)
+                    ForEach(detail.custom_fields) { field in
+                        LabeledContent(field.key, value: field.value)
+                    }
                 }
             } else {
                 VStack(alignment: .leading, spacing: 8) {

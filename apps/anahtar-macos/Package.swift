@@ -12,7 +12,10 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "AnahtarMac",
-            path: "Sources/AnahtarMac"
+            path: "Sources/AnahtarMac",
+            linkerSettings: [
+                .unsafeFlags(["-L", "../../target/aarch64-apple-darwin/release", "-lanahtar_ffi"])
+            ]
         )
     ]
 )

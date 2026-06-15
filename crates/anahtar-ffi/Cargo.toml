@@ -1,0 +1,17 @@
+[package]
+name = "anahtar-ffi"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+
+[lib]
+crate-type = ["staticlib", "rlib"]
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+anahtar-app = { path = "../anahtar-app" }
+anahtar-core = { path = "../anahtar-core" }
+
+[dev-dependencies]
+serde_json = { workspace = true }

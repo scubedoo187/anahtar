@@ -42,3 +42,4 @@
 
 # Swift Package build artifacts
 apps/anahtar-macos/.build/
+apps/anahtar-macos/build/
