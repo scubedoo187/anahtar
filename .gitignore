@@ -39,3 +39,6 @@
 
 # Tauri generated schemas
 **/src-tauri/gen/
+
+# Swift Package build artifacts
+apps/anahtar-macos/.build/
