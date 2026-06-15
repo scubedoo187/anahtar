@@ -16,5 +16,6 @@ struct AnahtarCommands: Commands {
             Button("Focus Search") { model.focusSearch() }
                 .keyboardShortcut("f", modifiers: [.command])
         }
+        SidebarCommands()
     }
 }

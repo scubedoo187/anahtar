@@ -2,12 +2,23 @@ import AppKit
 import Foundation
 import UniformTypeIdentifiers
 
+struct RecentVault: Codable, Identifiable, Hashable {
+    var id: String { path }
+    let path: String
+    let keyFilePath: String?
+
+    var displayName: String {
+        URL(fileURLWithPath: path).lastPathComponent
+    }
+}
+
 @MainActor
 final class AppModel: ObservableObject {
     @Published var statusMessage = "Native macOS scaffold ready."
     @Published var vaultPath = ""
     @Published var keyFilePath = ""
     @Published var masterPassword = ""
+    @Published var recentVaults: [RecentVault] = []
     @Published var unlocked = false
     @Published var selectedGroup: String? = nil
     @Published var selectedEntryID: String? = nil {
@@ -23,7 +34,6 @@ final class AppModel: ObservableObject {
     @Published var selectedDetail: EntryDetail? = nil
     @Published var detailRevealed = false
     @Published var searchQuery = ""
-    @Published var sidebarCollapsed = false
     @Published var showAddEntrySheet = false
     @Published var showEditEntrySheet = false
     @Published var newEntryGroup = "General/Web"
@@ -40,8 +50,18 @@ final class AppModel: ObservableObject {
     @Published var editEntryNotes = ""
     @Published var auditFindings: [AuditFinding] = []
 
+    private static let recentVaultsKey = "AnahtarRecentVaults"
     private let backend = BackendBridge()
     private var sessionPassword = ""
+
+    init() {
+        loadRecentVaults()
+        if let recent = recentVaults.first {
+            vaultPath = recent.path
+            keyFilePath = recent.keyFilePath ?? ""
+            statusMessage = "Recent vault selected. Enter the master password to unlock."
+        }
+    }
     private var clipboardClearTimer: Timer?
     private var ownedClipboardValue: String?
 
@@ -243,6 +263,42 @@ final class AppModel: ObservableObject {
         }
     }
 
+
+    func selectRecentVault(_ recent: RecentVault) {
+        vaultPath = recent.path
+        keyFilePath = recent.keyFilePath ?? ""
+        masterPassword = ""
+        statusMessage = "Recent vault selected. Enter the master password to unlock."
+    }
+
+    func clearRecentVaults() {
+        recentVaults = []
+        UserDefaults.standard.removeObject(forKey: Self.recentVaultsKey)
+        statusMessage = "Recent vaults cleared."
+    }
+
+    private func loadRecentVaults() {
+        guard let data = UserDefaults.standard.data(forKey: Self.recentVaultsKey),
+              let decoded = try? JSONDecoder().decode([RecentVault].self, from: data) else {
+            recentVaults = []
+            return
+        }
+        recentVaults = decoded.filter { !$0.path.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    }
+
+    private func rememberCurrentVault() {
+        let path = vaultPath.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !path.isEmpty else { return }
+        let keyFile = optionalKeyFilePath()
+        let current = RecentVault(path: path, keyFilePath: keyFile)
+        var updated = [current]
+        updated.append(contentsOf: recentVaults.filter { $0.path != path })
+        recentVaults = Array(updated.prefix(10))
+        if let data = try? JSONEncoder().encode(recentVaults) {
+            UserDefaults.standard.set(data, forKey: Self.recentVaultsKey)
+        }
+    }
+
     func chooseVault() {
         if let url = openFilePanel(title: "Choose KDBX Vault", allowedExtensions: ["kdbx", "kdb"]) {
             vaultPath = url.path
@@ -280,6 +336,7 @@ final class AppModel: ObservableObject {
             detailRevealed = false
             unlocked = true
             sessionPassword = masterPassword
+            rememberCurrentVault()
             masterPassword = ""
             statusMessage = "Unlocked \(loadedEntries.count) entries."
         } catch {
@@ -315,10 +372,6 @@ final class AppModel: ObservableObject {
         selectedDetail = nil
         detailRevealed = false
         statusMessage = "Showing \(entries.count) entries."
-    }
-
-    func toggleSidebar() {
-        sidebarCollapsed.toggle()
     }
 
     func toggleRevealPassword() {
