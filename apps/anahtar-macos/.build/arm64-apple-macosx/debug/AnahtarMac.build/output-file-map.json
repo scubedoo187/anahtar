@@ -1,0 +1,33 @@
+{
+  "": {
+    "swift-dependencies": "/Users/yg_jung/workspace/anahtar/apps/anahtar-macos/.build/arm64-apple-macosx/debug/AnahtarMac.build/master.swiftdeps"
+  },
+  "/Users/yg_jung/workspace/anahtar/apps/anahtar-macos/Sources/AnahtarMac/AnahtarApp.swift": {
+    "dependencies": "/Users/yg_jung/workspace/anahtar/apps/anahtar-macos/.build/arm64-apple-macosx/debug/AnahtarMac.build/AnahtarApp.d",
+    "object": "/Users/yg_jung/workspace/anahtar/apps/anahtar-macos/.build/arm64-apple-macosx/debug/AnahtarMac.build/AnahtarApp.swift.o",
+    "swiftmodule": "/Users/yg_jung/workspace/anahtar/apps/anahtar-macos/.build/arm64-apple-macosx/debug/AnahtarMac.build/AnahtarApp~partial.swiftmodule",
+    "swift-dependencies": "/Users/yg_jung/workspace/anahtar/apps/anahtar-macos/.build/arm64-apple-macosx/debug/AnahtarMac.build/AnahtarApp.swiftdeps",
+    "diagnostics": "/Users/yg_jung/workspace/anahtar/apps/anahtar-macos/.build/arm64-apple-macosx/debug/AnahtarMac.build/AnahtarApp.dia"
+  },
+  "/Users/yg_jung/workspace/anahtar/apps/anahtar-macos/Sources/AnahtarMac/AnahtarCommands.swift": {
+    "dependencies": "/Users/yg_jung/workspace/anahtar/apps/anahtar-macos/.build/arm64-apple-macosx/debug/AnahtarMac.build/AnahtarCommands.d",
+    "object": "/Users/yg_jung/workspace/anahtar/apps/anahtar-macos/.build/arm64-apple-macosx/debug/AnahtarMac.build/AnahtarCommands.swift.o",
+    "swiftmodule": "/Users/yg_jung/workspace/anahtar/apps/anahtar-macos/.build/arm64-apple-macosx/debug/AnahtarMac.build/AnahtarCommands~partial.swiftmodule",
+    "swift-dependencies": "/Users/yg_jung/workspace/anahtar/apps/anahtar-macos/.build/arm64-apple-macosx/debug/AnahtarMac.build/AnahtarCommands.swiftdeps",
+    "diagnostics": "/Users/yg_jung/workspace/anahtar/apps/anahtar-macos/.build/arm64-apple-macosx/debug/AnahtarMac.build/AnahtarCommands.dia"
+  },
+  "/Users/yg_jung/workspace/anahtar/apps/anahtar-macos/Sources/AnahtarMac/AppModel.swift": {
+    "dependencies": "/Users/yg_jung/workspace/anahtar/apps/anahtar-macos/.build/arm64-apple-macosx/debug/AnahtarMac.build/AppModel.d",
+    "object": "/Users/yg_jung/workspace/anahtar/apps/anahtar-macos/.build/arm64-apple-macosx/debug/AnahtarMac.build/AppModel.swift.o",
+    "swiftmodule": "/Users/yg_jung/workspace/anahtar/apps/anahtar-macos/.build/arm64-apple-macosx/debug/AnahtarMac.build/AppModel~partial.swiftmodule",
+    "swift-dependencies": "/Users/yg_jung/workspace/anahtar/apps/anahtar-macos/.build/arm64-apple-macosx/debug/AnahtarMac.build/AppModel.swiftdeps",
+    "diagnostics": "/Users/yg_jung/workspace/anahtar/apps/anahtar-macos/.build/arm64-apple-macosx/debug/AnahtarMac.build/AppModel.dia"
+  },
+  "/Users/yg_jung/workspace/anahtar/apps/anahtar-macos/Sources/AnahtarMac/RootView.swift": {
+    "dependencies": "/Users/yg_jung/workspace/anahtar/apps/anahtar-macos/.build/arm64-apple-macosx/debug/AnahtarMac.build/RootView.d",
+    "object": "/Users/yg_jung/workspace/anahtar/apps/anahtar-macos/.build/arm64-apple-macosx/debug/AnahtarMac.build/RootView.swift.o",
+    "swiftmodule": "/Users/yg_jung/workspace/anahtar/apps/anahtar-macos/.build/arm64-apple-macosx/debug/AnahtarMac.build/RootView~partial.swiftmodule",
+    "swift-dependencies": "/Users/yg_jung/workspace/anahtar/apps/anahtar-macos/.build/arm64-apple-macosx/debug/AnahtarMac.build/RootView.swiftdeps",
+    "diagnostics": "/Users/yg_jung/workspace/anahtar/apps/anahtar-macos/.build/arm64-apple-macosx/debug/AnahtarMac.build/RootView.dia"
+  }
+}

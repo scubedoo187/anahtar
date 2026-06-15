@@ -1,0 +1,81 @@
+client:
+  name: basic
+  file-system: device-agnostic
+tools: {}
+targets:
+  "Anahtar-arm64-apple-macosx26.0-debug.exe": ["<Anahtar-arm64-apple-macosx26.0-debug.exe>"]
+  "AnahtarMac-arm64-apple-macosx26.0-debug.module": ["<AnahtarMac-arm64-apple-macosx26.0-debug.module>"]
+  "PackageStructure": ["<PackageStructure>"]
+  "main": ["<Anahtar-arm64-apple-macosx26.0-debug.exe>","<AnahtarMac-arm64-apple-macosx26.0-debug.module>"]
+  "test": ["<Anahtar-arm64-apple-macosx26.0-debug.exe>","<AnahtarMac-arm64-apple-macosx26.0-debug.module>"]
+default: "main"
+nodes:
+  "/Users/yg_jung/workspace/anahtar/apps/anahtar-macos/Sources/AnahtarMac/":
+    is-directory-structure: true
+    content-exclusion-patterns: [".git",".build"]
+  "/Users/yg_jung/workspace/anahtar/apps/anahtar-macos/.build/arm64-apple-macosx/debug/Anahtar":
+    is-mutated: true
+commands:
+  "/Users/yg_jung/workspace/anahtar/apps/anahtar-macos/.build/arm64-apple-macosx/debug/Anahtar-entitlement.plist":
+    tool: write-auxiliary-file
+    inputs: ["<entitlement-plist>","<com.apple.security.get-task-allow>"]
+    outputs: ["/Users/yg_jung/workspace/anahtar/apps/anahtar-macos/.build/arm64-apple-macosx/debug/Anahtar-entitlement.plist"]
+    description: "Write auxiliary file /Users/yg_jung/workspace/anahtar/apps/anahtar-macos/.build/arm64-apple-macosx/debug/Anahtar-entitlement.plist"
+
+  "/Users/yg_jung/workspace/anahtar/apps/anahtar-macos/.build/arm64-apple-macosx/debug/Anahtar.product/Objects.LinkFileList":
+    tool: write-auxiliary-file
+    inputs: ["<link-file-list>","/Users/yg_jung/workspace/anahtar/apps/anahtar-macos/.build/arm64-apple-macosx/debug/AnahtarMac.build/AnahtarApp.swift.o","/Users/yg_jung/workspace/anahtar/apps/anahtar-macos/.build/arm64-apple-macosx/debug/AnahtarMac.build/AnahtarCommands.swift.o","/Users/yg_jung/workspace/anahtar/apps/anahtar-macos/.build/arm64-apple-macosx/debug/AnahtarMac.build/AppModel.swift.o","/Users/yg_jung/workspace/anahtar/apps/anahtar-macos/.build/arm64-apple-macosx/debug/AnahtarMac.build/RootView.swift.o"]
+    outputs: ["/Users/yg_jung/workspace/anahtar/apps/anahtar-macos/.build/arm64-apple-macosx/debug/Anahtar.product/Objects.LinkFileList"]
+    description: "Write auxiliary file /Users/yg_jung/workspace/anahtar/apps/anahtar-macos/.build/arm64-apple-macosx/debug/Anahtar.product/Objects.LinkFileList"
+
+  "/Users/yg_jung/workspace/anahtar/apps/anahtar-macos/.build/arm64-apple-macosx/debug/AnahtarMac.build/sources":
+    tool: write-auxiliary-file
+    inputs: ["<sources-file-list>","/Users/yg_jung/workspace/anahtar/apps/anahtar-macos/Sources/AnahtarMac/AnahtarApp.swift","/Users/yg_jung/workspace/anahtar/apps/anahtar-macos/Sources/AnahtarMac/AnahtarCommands.swift","/Users/yg_jung/workspace/anahtar/apps/anahtar-macos/Sources/AnahtarMac/AppModel.swift","/Users/yg_jung/workspace/anahtar/apps/anahtar-macos/Sources/AnahtarMac/RootView.swift"]
+    outputs: ["/Users/yg_jung/workspace/anahtar/apps/anahtar-macos/.build/arm64-apple-macosx/debug/AnahtarMac.build/sources"]
+    description: "Write auxiliary file /Users/yg_jung/workspace/anahtar/apps/anahtar-macos/.build/arm64-apple-macosx/debug/AnahtarMac.build/sources"
+
+  "/Users/yg_jung/workspace/anahtar/apps/anahtar-macos/.build/arm64-apple-macosx/debug/swift-version--1AB21518FC5DEDBE.txt":
+    tool: write-auxiliary-file
+    inputs: ["<swift-get-version>","/Library/Developer/CommandLineTools/usr/bin/swiftc"]
+    outputs: ["/Users/yg_jung/workspace/anahtar/apps/anahtar-macos/.build/arm64-apple-macosx/debug/swift-version--1AB21518FC5DEDBE.txt"]
+    always-out-of-date: "true"
+    description: "Write auxiliary file /Users/yg_jung/workspace/anahtar/apps/anahtar-macos/.build/arm64-apple-macosx/debug/swift-version--1AB21518FC5DEDBE.txt"
+
+  "<Anahtar-arm64-apple-macosx26.0-debug.exe>":
+    tool: phony
+    inputs: ["<Anahtar-arm64-apple-macosx26.0-debug.exe-CodeSigning>"]
+    outputs: ["<Anahtar-arm64-apple-macosx26.0-debug.exe>"]
+
+  "<AnahtarMac-arm64-apple-macosx26.0-debug.module>":
+    tool: phony
+    inputs: ["/Users/yg_jung/workspace/anahtar/apps/anahtar-macos/.build/arm64-apple-macosx/debug/AnahtarMac.build/AnahtarApp.swift.o","/Users/yg_jung/workspace/anahtar/apps/anahtar-macos/.build/arm64-apple-macosx/debug/AnahtarMac.build/AnahtarCommands.swift.o","/Users/yg_jung/workspace/anahtar/apps/anahtar-macos/.build/arm64-apple-macosx/debug/AnahtarMac.build/AppModel.swift.o","/Users/yg_jung/workspace/anahtar/apps/anahtar-macos/.build/arm64-apple-macosx/debug/AnahtarMac.build/RootView.swift.o","/Users/yg_jung/workspace/anahtar/apps/anahtar-macos/.build/arm64-apple-macosx/debug/Modules/AnahtarMac.swiftmodule"]
+    outputs: ["<AnahtarMac-arm64-apple-macosx26.0-debug.module>"]
+
+  "C.Anahtar-arm64-apple-macosx26.0-debug.exe":
+    tool: shell
+    inputs: ["/Users/yg_jung/workspace/anahtar/apps/anahtar-macos/.build/arm64-apple-macosx/debug/AnahtarMac.build/AnahtarApp.swift.o","/Users/yg_jung/workspace/anahtar/apps/anahtar-macos/.build/arm64-apple-macosx/debug/AnahtarMac.build/AnahtarCommands.swift.o","/Users/yg_jung/workspace/anahtar/apps/anahtar-macos/.build/arm64-apple-macosx/debug/AnahtarMac.build/AppModel.swift.o","/Users/yg_jung/workspace/anahtar/apps/anahtar-macos/.build/arm64-apple-macosx/debug/AnahtarMac.build/RootView.swift.o","/Users/yg_jung/workspace/anahtar/apps/anahtar-macos/.build/arm64-apple-macosx/debug/Anahtar.product/Objects.LinkFileList"]
+    outputs: ["/Users/yg_jung/workspace/anahtar/apps/anahtar-macos/.build/arm64-apple-macosx/debug/Anahtar"]
+    description: "Linking ./.build/arm64-apple-macosx/debug/Anahtar"
+    args: ["/Library/Developer/CommandLineTools/usr/bin/swiftc","-L","/Users/yg_jung/workspace/anahtar/apps/anahtar-macos/.build/arm64-apple-macosx/debug","-o","/Users/yg_jung/workspace/anahtar/apps/anahtar-macos/.build/arm64-apple-macosx/debug/Anahtar","-module-name","Anahtar","-Xlinker","-no_warn_duplicate_libraries","-emit-executable","-Xlinker","-alias","-Xlinker","_AnahtarMac_main","-Xlinker","_main","-Xlinker","-rpath","-Xlinker","@loader_path","@/Users/yg_jung/workspace/anahtar/apps/anahtar-macos/.build/arm64-apple-macosx/debug/Anahtar.product/Objects.LinkFileList","-target","arm64-apple-macosx13.0","-Xlinker","-add_ast_path","-Xlinker","/Users/yg_jung/workspace/anahtar/apps/anahtar-macos/.build/arm64-apple-macosx/debug/Modules/AnahtarMac.swiftmodule","-I","/Library/Developer/CommandLineTools/Library/Developer/Frameworks","-L","/Library/Developer/CommandLineTools/Library/Developer/Frameworks","-plugin-path","/Library/Developer/CommandLineTools/usr/lib/swift/host/plugins/testing","-sdk","/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk","-g"]
+
+  "C.Anahtar-arm64-apple-macosx26.0-debug.exe-entitlements":
+    tool: shell
+    inputs: ["/Users/yg_jung/workspace/anahtar/apps/anahtar-macos/.build/arm64-apple-macosx/debug/Anahtar","/Users/yg_jung/workspace/anahtar/apps/anahtar-macos/.build/arm64-apple-macosx/debug/Anahtar-entitlement.plist"]
+    outputs: ["<Anahtar-arm64-apple-macosx26.0-debug.exe-CodeSigning>"]
+    description: "Applying debug entitlements to ./.build/arm64-apple-macosx/debug/Anahtar"
+    args: ["codesign","--force","--sign","-","--entitlements","/Users/yg_jung/workspace/anahtar/apps/anahtar-macos/.build/arm64-apple-macosx/debug/Anahtar-entitlement.plist","/Users/yg_jung/workspace/anahtar/apps/anahtar-macos/.build/arm64-apple-macosx/debug/Anahtar"]
+
+  "C.AnahtarMac-arm64-apple-macosx26.0-debug.module":
+    tool: shell
+    inputs: ["/Users/yg_jung/workspace/anahtar/apps/anahtar-macos/Sources/AnahtarMac/AnahtarApp.swift","/Users/yg_jung/workspace/anahtar/apps/anahtar-macos/Sources/AnahtarMac/AnahtarCommands.swift","/Users/yg_jung/workspace/anahtar/apps/anahtar-macos/Sources/AnahtarMac/AppModel.swift","/Users/yg_jung/workspace/anahtar/apps/anahtar-macos/Sources/AnahtarMac/RootView.swift","/Users/yg_jung/workspace/anahtar/apps/anahtar-macos/.build/arm64-apple-macosx/debug/swift-version--1AB21518FC5DEDBE.txt","/Users/yg_jung/workspace/anahtar/apps/anahtar-macos/.build/arm64-apple-macosx/debug/AnahtarMac.build/sources"]
+    outputs: ["/Users/yg_jung/workspace/anahtar/apps/anahtar-macos/.build/arm64-apple-macosx/debug/AnahtarMac.build/AnahtarApp.swift.o","/Users/yg_jung/workspace/anahtar/apps/anahtar-macos/.build/arm64-apple-macosx/debug/AnahtarMac.build/AnahtarCommands.swift.o","/Users/yg_jung/workspace/anahtar/apps/anahtar-macos/.build/arm64-apple-macosx/debug/AnahtarMac.build/AppModel.swift.o","/Users/yg_jung/workspace/anahtar/apps/anahtar-macos/.build/arm64-apple-macosx/debug/AnahtarMac.build/RootView.swift.o","/Users/yg_jung/workspace/anahtar/apps/anahtar-macos/.build/arm64-apple-macosx/debug/Modules/AnahtarMac.swiftmodule"]
+    description: "Compiling Swift Module 'AnahtarMac' (4 sources)"
+    args: ["/Library/Developer/CommandLineTools/usr/bin/swiftc","-module-name","AnahtarMac","-emit-dependencies","-emit-module","-emit-module-path","/Users/yg_jung/workspace/anahtar/apps/anahtar-macos/.build/arm64-apple-macosx/debug/Modules/AnahtarMac.swiftmodule","-output-file-map","/Users/yg_jung/workspace/anahtar/apps/anahtar-macos/.build/arm64-apple-macosx/debug/AnahtarMac.build/output-file-map.json","-incremental","-c","@/Users/yg_jung/workspace/anahtar/apps/anahtar-macos/.build/arm64-apple-macosx/debug/AnahtarMac.build/sources","-I","/Users/yg_jung/workspace/anahtar/apps/anahtar-macos/.build/arm64-apple-macosx/debug/Modules","-target","arm64-apple-macosx13.0","-incremental","-enable-batch-mode","-serialize-diagnostics","-index-store-path","/Users/yg_jung/workspace/anahtar/apps/anahtar-macos/.build/arm64-apple-macosx/debug/index/store","-Onone","-enable-testing","-j10","-DSWIFT_PACKAGE","-DDEBUG","-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE","-module-cache-path","/Users/yg_jung/workspace/anahtar/apps/anahtar-macos/.build/arm64-apple-macosx/debug/ModuleCache","-parseable-output","-Xfrontend","-entry-point-function-name","-Xfrontend","AnahtarMac_main","-swift-version","6","-I","/Library/Developer/CommandLineTools/Library/Developer/Frameworks","-L","/Library/Developer/CommandLineTools/Library/Developer/Frameworks","-plugin-path","/Library/Developer/CommandLineTools/usr/lib/swift/host/plugins/testing","-sdk","/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk","-g","-Xcc","-isysroot","-Xcc","/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk","-Xcc","-fPIC","-Xcc","-g","-package-name","anahtar_macos"]
+
+  "PackageStructure":
+    tool: package-structure-tool
+    inputs: ["/Users/yg_jung/workspace/anahtar/apps/anahtar-macos/Sources/AnahtarMac/","/Users/yg_jung/workspace/anahtar/apps/anahtar-macos/Package.swift","/Users/yg_jung/workspace/anahtar/apps/anahtar-macos/Package.resolved"]
+    outputs: ["<PackageStructure>"]
+    description: "Planning build"
+    allow-missing-inputs: true
+

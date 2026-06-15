@@ -25,6 +25,10 @@ This is a deliberate direction change for GUI integrity and native macOS feel. T
 - No password/key-file contents persisted in macOS preferences, Keychain, logs, or crash reports.
 - No Swift reimplementation of KDBX logic.
 
+## Approach
+
+Build a native macOS app in parallel with the current Tauri GUI. Start with a minimal SwiftUI/AppKit shell and a very small Rust FFI bridge, then port one proven Tauri workflow at a time. Keep the current Tauri GUI as a working reference until the native app reaches unlock/list/show parity; do not delete or destabilize it during the transition.
+
 ## Target architecture
 
 ```text
@@ -62,6 +66,31 @@ crates/anahtar-core/         # existing KDBX implementation
   - audit
   - TOTP
   - safe in-place write + backup verification
+
+## Files to modify
+
+Critical paths expected during implementation:
+
+- `apps/anahtar-macos/` — new native SwiftUI/AppKit macOS app.
+- `crates/anahtar-ffi/` — new C ABI / JSON bridge around `anahtar-app`.
+- `Cargo.toml` — add the FFI crate to the workspace.
+- `crates/anahtar-app/src/lib.rs` — reuse existing service APIs; change only if native needs a missing app-level operation.
+- `apps/anahtar-gui/` — keep as reference implementation; avoid broad changes except documentation/compatibility notes.
+- `docs/gui-api-contract.md` — update if the native bridge formalizes or revises DTO contracts.
+- `docs/phase-plans/phase-7-native-macos-transition.md` — track this transition plan.
+- `goals/phase-6-gui-alpha/progress.jsonl` or a new native goal progress log — record verification evidence.
+
+## Reuse
+
+Existing implementation to reuse rather than rewrite:
+
+- `crates/anahtar-app/src/lib.rs` — `AnahtarService`, `WriteMode`, high-level app workflows.
+- `crates/anahtar-core/src/internal.rs` and public facades — KDBX open/list/search/show/write/group/audit/TOTP logic.
+- `apps/anahtar-gui/src/api.ts` — current DTO shape and command surface reference for FFI JSON contracts.
+- `apps/anahtar-gui/src/errors.ts` — friendly error mapping reference.
+- `apps/anahtar-gui/src/clipboard.ts` — owned clipboard-clear policy reference.
+- `apps/anahtar-gui/src/main.ts` and `render.ts` — existing workflow behavior reference, not target architecture.
+- `docs/gui-api-contract.md` — existing app-service contract.
 
 ## Bridge strategy
 
@@ -127,6 +156,16 @@ Potential later upgrade:
 - No logging of secrets.
 - Clipboard clear policy remains: clear only if clipboard still contains Anahtar-owned value.
 - Key-file path may be remembered; key-file contents are never stored.
+
+## Steps
+
+- [ ] Slice N1 — Create native macOS project scaffold.
+- [ ] Slice N2 — Add Rust FFI bridge scaffold and backend status call.
+- [ ] Slice N3 — Implement native unlock/list/search/show using the FFI bridge.
+- [ ] Slice N4 — Implement clipboard/TOTP/reveal behavior natively.
+- [ ] Slice N5 — Implement writes/groups/audit through Rust backend only.
+- [ ] Slice N6 — Replace packaging path with native `.app` build/archive documentation.
+- [ ] Decide when to deprecate or remove the Tauri GUI after native parity is reached.
 
 ## Migration slices
 
@@ -213,6 +252,31 @@ Verification:
 - Swift/Rust build integration time.
 - Native feature parity may delay Phase 8 packaging.
 - Current Tauri app will temporarily duplicate UI effort until deprecated.
+
+## Verification
+
+Run verification at each slice and record evidence:
+
+- Native app builds with `xcodebuild` or Swift Package tooling.
+- Rust FFI crate builds and is covered by Rust unit tests where practical.
+- Existing Rust workspace checks continue to pass:
+  - `cargo fmt --all -- --check`
+  - `cargo test --workspace`
+  - `cargo clippy --workspace --all-targets -- -D warnings`
+  - `cargo check --workspace --examples`
+- Native manual smoke tests:
+  - open generated or copied test vault via native file picker,
+  - unlock with password/key-file as applicable,
+  - list/search/show safe detail,
+  - reveal/hide password toggle,
+  - copy username/password/TOTP with owned clipboard clear,
+  - write to copied test vault and reopen to confirm persistence,
+  - verify backup path is shown and backup file exists.
+- Safety scans/checks:
+  - no persisted master password,
+  - no persisted entry/TOTP secrets,
+  - no KDBX logic duplicated in Swift,
+  - no real vaults/key files committed.
 
 ## Recommendation
 
