@@ -56,6 +56,7 @@ final class AppModel: ObservableObject {
     @Published var editEntryURL = ""
     @Published var editEntryNotes = ""
     @Published var auditFindings: [AuditFinding] = []
+    @Published var showAuditWindow = false
 
     private static let recentVaultsKey = "AnahtarRecentVaults"
     private let backend = BackendBridge()
@@ -208,6 +209,7 @@ final class AppModel: ObservableObject {
         do {
             let report = try backend.auditVault(vaultRequest())
             auditFindings = report.findings
+            showAuditWindow = true
             statusMessage = "Audit found \(report.findings.count) findings."
         } catch {
             statusMessage = error.localizedDescription
@@ -484,6 +486,7 @@ final class AppModel: ObservableObject {
         selectedEntryID = nil
         selectedDetail = nil
         detailRevealed = false
+        showAuditWindow = false
         clearClipboardTimer()
         toastDismissTask?.cancel()
         toastDismissTask = nil

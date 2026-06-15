@@ -21,6 +21,10 @@ struct RootView: View {
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
+        .sheet(isPresented: $model.showAuditWindow) {
+            AuditResultsWindow()
+                .environmentObject(model)
+        }
         .animation(.easeOut(duration: 0.18), value: model.toastMessage)
     }
 
@@ -316,6 +320,70 @@ struct EditEntrySheet: View {
     }
 }
 
+
+struct AuditResultsWindow: View {
+    @EnvironmentObject private var model: AppModel
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Audit Results")
+                        .font(.title2)
+                        .fontWeight(.semibold)
+                    Text("Vault-level findings for this unlocked vault.")
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button("Close") { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+            }
+            .padding(16)
+            Divider()
+
+            if model.auditFindings.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    Image(systemName: "checkmark.shield")
+                        .font(.largeTitle)
+                        .foregroundStyle(.secondary)
+                    Text("No audit findings.")
+                        .font(.headline)
+                }
+                .padding(20)
+                Spacer()
+            } else {
+                ScrollView {
+                    VStack(spacing: 0) {
+                        ForEach(model.auditFindings) { finding in
+                            VStack(alignment: .leading, spacing: 5) {
+                                HStack {
+                                    Text(finding.kind)
+                                        .font(.caption)
+                                        .fontWeight(.bold)
+                                        .textCase(.uppercase)
+                                        .foregroundStyle(.secondary)
+                                    Spacer()
+                                    Text(finding.group_path)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Text(finding.title ?? finding.entry_id)
+                                    .fontWeight(.semibold)
+                                Text(finding.message)
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 10)
+                            Divider()
+                        }
+                    }
+                }
+            }
+        }
+        .frame(minWidth: 620, minHeight: 420)
+    }
+}
+
 struct EntryDetailView: View {
     @EnvironmentObject private var model: AppModel
 
@@ -346,15 +414,6 @@ struct EntryDetailView: View {
                         .disabled(!detail.has_totp)
                 }
                 detailRow("Notes", detail.notes ?? "")
-                if !model.auditFindings.isEmpty {
-                    Divider()
-                    Text("Audit findings")
-                        .font(.headline)
-                    ForEach(model.auditFindings.prefix(8)) { finding in
-                        Text("\(finding.kind): \(finding.title ?? finding.entry_id) — \(finding.message)")
-                            .font(.caption)
-                    }
-                }
                 if !detail.custom_fields.isEmpty {
                     Divider()
                     Text("Custom fields")
