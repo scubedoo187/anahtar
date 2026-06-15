@@ -59,6 +59,7 @@ final class AppModel: ObservableObject {
     @Published var detailRevealed = false
     @Published var searchQuery = ""
     @Published var searchFocusRequest = 0
+    @Published var detailFocusRequest = 0
     @Published var showAddEntrySheet = false
     @Published var showEditEntrySheet = false
     @Published var newEntryGroup = "General/Web"
@@ -530,6 +531,10 @@ final class AppModel: ObservableObject {
     func copyValue(_ value: String, label: String) {
         guard !value.isEmpty else { return }
         copyWithOwnedClear(value, label: label)
+    }
+
+    func focusDetailAttribute() {
+        detailFocusRequest += 1
     }
 
     func focusSearch() {

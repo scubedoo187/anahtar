@@ -42,52 +42,58 @@ struct RootView: View {
 
 
 
-private struct KeyboardCaptureView: NSViewRepresentable {
-    @Binding var active: Bool
-    let handler: (NSEvent) -> Bool
-
-    func makeNSView(context: Context) -> KeyView {
-        let view = KeyView()
-        view.handler = handler
-        view.onResign = { active = false }
-        return view
-    }
-
-    func updateNSView(_ nsView: KeyView, context: Context) {
-        nsView.handler = handler
-        nsView.onResign = { active = false }
-        if active, nsView.window?.firstResponder !== nsView {
-            DispatchQueue.main.async {
-                nsView.window?.makeFirstResponder(nsView)
-            }
-        }
-    }
-
-    final class KeyView: NSView {
-        var handler: ((NSEvent) -> Bool)?
-        var onResign: (() -> Void)?
-
-        override var acceptsFirstResponder: Bool { true }
-
-        override func resignFirstResponder() -> Bool {
-            onResign?()
-            return super.resignFirstResponder()
-        }
-
-        override func keyDown(with event: NSEvent) {
-            if handler?(event) == true {
-                return
-            }
-            super.keyDown(with: event)
-        }
-    }
-}
-
 private enum KeyCode {
     static let `return`: UInt16 = 36
     static let keypadEnter: UInt16 = 76
     static let arrowUp: UInt16 = 126
     static let arrowDown: UInt16 = 125
+}
+
+
+private struct KeyEventMonitorView: NSViewRepresentable {
+    var active: Bool
+    let handler: (NSEvent) -> Bool
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    func makeNSView(context: Context) -> NSView {
+        NSView(frame: .zero)
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        context.coordinator.handler = handler
+        context.coordinator.setActive(active)
+    }
+
+    static func dismantleNSView(_ nsView: NSView, coordinator: Coordinator) {
+        coordinator.setActive(false)
+    }
+
+    final class Coordinator {
+        var handler: ((NSEvent) -> Bool)?
+        private var monitor: Any?
+
+        func setActive(_ active: Bool) {
+            if active, monitor == nil {
+                monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+                    guard let self else { return event }
+                    if self.handler?(event) == true {
+                        return nil
+                    }
+                    return event
+                }
+            } else if !active, let monitor {
+                NSEvent.removeMonitor(monitor)
+                self.monitor = nil
+            }
+        }
+
+        deinit {
+            setActive(false)
+        }
+    }
 }
 
 struct ToastView: View {
@@ -248,16 +254,7 @@ struct EntryListView: View {
                         .focused($searchFocused)
                         .onSubmit { model.search() }
                         .onChange(of: model.searchQuery) { _ in model.updateSearchResults() }
-                        .onMoveCommand { direction in
-                            switch direction {
-                            case .down:
-                                moveFocusFromSearchToList(delta: 1)
-                            case .up:
-                                moveFocusFromSearchToList(delta: -1)
-                            default:
-                                break
-                            }
-                        }
+
                     if !model.searchQuery.isEmpty {
                         Button {
                             model.resetList()
@@ -290,20 +287,8 @@ struct EntryListView: View {
             }
             .focusable(true)
             .background(
-                KeyboardCaptureView(active: $listFocused) { event in
-                    switch event.keyCode {
-                    case KeyCode.arrowUp:
-                        model.selectAdjacentEntry(delta: -1)
-                        return true
-                    case KeyCode.arrowDown:
-                        model.selectAdjacentEntry(delta: 1)
-                        return true
-                    case KeyCode.return, KeyCode.keypadEnter:
-                        model.openSelectedEntryDetail()
-                        return true
-                    default:
-                        return false
-                    }
+                KeyEventMonitorView(active: listFocused || searchFocused) { event in
+                    handleEntryKey(event)
                 }
                 .frame(width: 0, height: 0)
             )
@@ -318,6 +303,9 @@ struct EntryListView: View {
                 listFocused = false
             }
         }
+        .onChange(of: model.detailFocusRequest) { _ in
+            listFocused = false
+        }
         .sheet(isPresented: $model.showAddEntrySheet) {
             AddEntrySheet()
                 .environmentObject(model)
@@ -325,6 +313,36 @@ struct EntryListView: View {
         .sheet(isPresented: $model.showEditEntrySheet) {
             EditEntrySheet()
                 .environmentObject(model)
+        }
+    }
+
+    private func handleEntryKey(_ event: NSEvent) -> Bool {
+        guard event.modifierFlags.intersection([.command, .option, .control]).isEmpty else { return false }
+        if searchFocused {
+            switch event.keyCode {
+            case KeyCode.arrowDown:
+                moveFocusFromSearchToList(delta: 1)
+                return true
+            case KeyCode.arrowUp:
+                moveFocusFromSearchToList(delta: -1)
+                return true
+            default:
+                return false
+            }
+        }
+        guard listFocused else { return false }
+        switch event.keyCode {
+        case KeyCode.arrowUp:
+            model.selectAdjacentEntry(delta: -1)
+            return true
+        case KeyCode.arrowDown:
+            model.selectAdjacentEntry(delta: 1)
+            return true
+        case KeyCode.return, KeyCode.keypadEnter:
+            model.openSelectedEntryDetail()
+            return true
+        default:
+            return false
         }
     }
 
@@ -495,13 +513,21 @@ struct DetailAttributeRow<Actions: View>: View {
     let label: String
     let value: String
     let copy: () -> Void
+    let onFocus: () -> Void
     let actions: Actions
     @State private var focused = false
 
-    init(label: String, value: String, copy: @escaping () -> Void, @ViewBuilder actions: () -> Actions) {
+    init(
+        label: String,
+        value: String,
+        copy: @escaping () -> Void,
+        onFocus: @escaping () -> Void,
+        @ViewBuilder actions: () -> Actions
+    ) {
         self.label = label
         self.value = value
         self.copy = copy
+        self.onFocus = onFocus
         self.actions = actions()
     }
 
@@ -524,10 +550,14 @@ struct DetailAttributeRow<Actions: View>: View {
             .background(focused ? Color.accentColor.opacity(0.14) : Color.clear)
             .contentShape(Rectangle())
             .focusable(true)
-            .onTapGesture(count: 1) { focused = true }
+            .onTapGesture(count: 1) {
+                focused = true
+                onFocus()
+            }
             .onTapGesture(count: 2) { copy() }
             .background(
-                KeyboardCaptureView(active: $focused) { event in
+                KeyEventMonitorView(active: focused) { event in
+                    guard event.modifierFlags.intersection([.command, .option, .control]).isEmpty else { return false }
                     switch event.keyCode {
                     case KeyCode.return, KeyCode.keypadEnter:
                         copy()
@@ -626,7 +656,7 @@ struct EntryDetailView: View {
         copy: @escaping () -> Void,
         @ViewBuilder actions: () -> Actions
     ) -> some View {
-        DetailAttributeRow(label: label, value: value, copy: copy, actions: actions)
+        DetailAttributeRow(label: label, value: value, copy: copy, onFocus: model.focusDetailAttribute, actions: actions)
     }
 
     private func copyToClipboard(_ value: String, label: String) {
