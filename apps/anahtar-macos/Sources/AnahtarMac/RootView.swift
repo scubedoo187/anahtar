@@ -298,25 +298,27 @@ struct EntryDetailView: View {
                 Text(detail.title ?? "<untitled>")
                     .font(.title2)
                     .fontWeight(.semibold)
-                LabeledContent("ID", value: detail.id)
-                LabeledContent("Group", value: detail.group_path)
-                LabeledContent("Username", value: detail.username ?? "")
-                LabeledContent("Password", value: model.detailRevealed ? (detail.password ?? "") : "<hidden>")
-                LabeledContent("URL", value: detail.url ?? "")
-                LabeledContent("TOTP", value: detail.has_totp ? "one-time code available" : "No TOTP code available")
-                LabeledContent("Notes", value: detail.notes ?? "")
-                HStack {
-                    Button("Copy Username") { model.copyUsername() }
+                detailRow("ID", detail.id)
+                detailRow("Group", detail.group_path)
+                detailRow("Username", detail.username ?? "") {
+                    inlineAction("⧉", "Copy username") { model.copyUsername() }
                         .disabled((detail.username ?? "").isEmpty)
-                    Button("Copy Password") { model.copyPassword() }
-                    Button(model.detailRevealed ? "Hide Password" : "Reveal Password") {
+                }
+                detailRow("Password", model.detailRevealed ? (detail.password ?? "") : "<hidden>") {
+                    inlineAction("⧉", "Copy password") { model.copyPassword() }
+                    inlineAction(model.detailRevealed ? "🙈" : "👁", model.detailRevealed ? "Hide password" : "Reveal password") {
                         model.toggleRevealPassword()
                     }
-                    Button("Copy URL") { model.copyURL() }
+                }
+                detailRow("URL", detail.url ?? "") {
+                    inlineAction("⧉", "Copy URL") { model.copyURL() }
                         .disabled((detail.url ?? "").isEmpty)
-                    Button("Copy TOTP") { model.copyTotp() }
+                }
+                detailRow("TOTP", detail.has_totp ? "one-time code available" : "No TOTP code available") {
+                    inlineAction("⧉", "Copy TOTP") { model.copyTotp() }
                         .disabled(!detail.has_totp)
                 }
+                detailRow("Notes", detail.notes ?? "")
                 if !model.auditFindings.isEmpty {
                     Divider()
                     Text("Audit findings")
@@ -331,7 +333,7 @@ struct EntryDetailView: View {
                     Text("Custom fields")
                         .font(.headline)
                     ForEach(detail.custom_fields) { field in
-                        LabeledContent(field.key, value: field.value)
+                        detailRow(field.key, field.value)
                     }
                 }
             } else {
@@ -350,5 +352,38 @@ struct EntryDetailView: View {
         }
         .padding(16)
         .navigationTitle("Detail")
+    }
+
+    private func detailRow(_ label: String, _ value: String) -> some View {
+        detailRow(label, value) { EmptyView() }
+    }
+
+    private func detailRow<Actions: View>(
+        _ label: String,
+        _ value: String,
+        @ViewBuilder actions: () -> Actions
+    ) -> some View {
+        VStack(spacing: 0) {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Text(label)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.secondary)
+                    .frame(width: 90, alignment: .leading)
+                Text(value)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                HStack(spacing: 4) {
+                    actions()
+                }
+            }
+            .padding(.vertical, 5)
+            Divider()
+        }
+    }
+
+    private func inlineAction(_ title: String, _ help: String, action: @escaping () -> Void) -> some View {
+        Button(title, action: action)
+            .buttonStyle(.borderless)
+            .help(help)
     }
 }
