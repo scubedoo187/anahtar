@@ -24,12 +24,19 @@ final class AppModel: ObservableObject {
     @Published var detailRevealed = false
     @Published var searchQuery = ""
     @Published var showAddEntrySheet = false
+    @Published var showEditEntrySheet = false
     @Published var newEntryGroup = "General/Web"
     @Published var newEntryTitle = ""
     @Published var newEntryUsername = ""
     @Published var newEntryPassword = ""
     @Published var newEntryURL = ""
     @Published var newEntryNotes = ""
+    @Published var editEntryGroup = ""
+    @Published var editEntryTitle = ""
+    @Published var editEntryUsername = ""
+    @Published var editEntryPassword = ""
+    @Published var editEntryURL = ""
+    @Published var editEntryNotes = ""
     @Published var auditFindings: [AuditFinding] = []
 
     private let backend = BackendBridge()
@@ -173,6 +180,63 @@ final class AppModel: ObservableObject {
             if entryID != nil {
                 loadSelectedDetail(revealPassword: false)
             }
+        } catch {
+            statusMessage = error.localizedDescription
+        }
+    }
+
+
+    func prepareEditEntry() {
+        guard let detail = selectedDetail else {
+            statusMessage = "Select an entry first."
+            return
+        }
+        editEntryGroup = normalizeGroupPath(detail.group_path)
+        editEntryTitle = detail.title ?? ""
+        editEntryUsername = detail.username ?? ""
+        editEntryPassword = ""
+        editEntryURL = detail.url ?? ""
+        editEntryNotes = detail.notes ?? ""
+        showEditEntrySheet = true
+    }
+
+    func saveEditedEntry() {
+        guard unlocked, let selectedEntryID, let original = selectedDetail else { return }
+        let title = editEntryTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        let group = editEntryGroup.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !title.isEmpty, !group.isEmpty else {
+            statusMessage = "Enter both a group path and a title."
+            return
+        }
+        do {
+            var report = try backend.editEntry(EditEntryFfiRequest(
+                path: vaultPath,
+                password: currentPasswordForSession(),
+                key_file: optionalKeyFilePath(),
+                entry_id: selectedEntryID,
+                entry: EditEntryInput(
+                    title: title,
+                    username: emptyToNil(editEntryUsername),
+                    password: editEntryPassword.isEmpty ? nil : editEntryPassword,
+                    url: emptyToNil(editEntryURL),
+                    notes: emptyToNil(editEntryNotes)
+                ),
+                backup_dir: nil
+            ))
+            let originalGroup = normalizeGroupPath(original.group_path)
+            if group != originalGroup {
+                report = try backend.moveEntry(MoveEntryFfiRequest(
+                    path: vaultPath,
+                    password: currentPasswordForSession(),
+                    key_file: optionalKeyFilePath(),
+                    entry_id: selectedEntryID,
+                    group_path: group,
+                    backup_dir: nil
+                ))
+            }
+            showEditEntrySheet = false
+            refreshAfterWrite(selecting: selectedEntryID)
+            statusMessage = writeStatus(report)
         } catch {
             statusMessage = error.localizedDescription
         }

@@ -96,7 +96,7 @@ struct GroupListView: View {
         List(selection: $model.selectedGroup) {
             Text("All Entries (\(model.entries.count))")
                 .tag(String?.none)
-            ForEach(model.groups.map { groupView($0) }, id: \.path) { group in
+            ForEach(model.groups.compactMap { groupView($0) }, id: \.path) { group in
                 Text("\(group.name) (\(group.count))")
                     .padding(.leading, CGFloat(group.depth * 12))
                     .tag(Optional(group.path))
@@ -112,8 +112,9 @@ struct GroupListView: View {
         }
     }
 
-    private func groupView(_ group: GroupSummary) -> (path: String, name: String, depth: Int, count: Int) {
+    private func groupView(_ group: GroupSummary) -> (path: String, name: String, depth: Int, count: Int)? {
         let path = normalizeGroupPath(group.path)
+        guard !path.isEmpty else { return nil }
         let name = group.name.isEmpty ? path.split(separator: "/").last.map(String.init) ?? path : group.name
         let depth = max(path.split(separator: "/").count - 1, 0)
         let count = model.entries.filter { entry in
@@ -160,11 +161,17 @@ struct EntryListView: View {
         .navigationTitle("Entries")
         .toolbar {
             Button("＋") { model.prepareAddEntry() }
+            Button("✎") { model.prepareEditEntry() }
+                .disabled(model.selectedEntryID == nil)
             Button("⌫") { model.deleteSelectedEntry() }
                 .disabled(model.selectedEntryID == nil)
         }
         .sheet(isPresented: $model.showAddEntrySheet) {
             AddEntrySheet()
+                .environmentObject(model)
+        }
+        .sheet(isPresented: $model.showEditEntrySheet) {
+            EditEntrySheet()
                 .environmentObject(model)
         }
     }
@@ -188,6 +195,36 @@ struct AddEntrySheet: View {
             TextField("Notes", text: $model.newEntryNotes)
             HStack {
                 Button("Save") { model.saveNewEntry() }
+                    .keyboardShortcut(.return, modifiers: [])
+                Button("Cancel") { dismiss() }
+            }
+        }
+        .textFieldStyle(.roundedBorder)
+        .padding(20)
+        .frame(width: 460)
+    }
+}
+
+
+struct EditEntrySheet: View {
+    @EnvironmentObject private var model: AppModel
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Edit Entry")
+                .font(.title2)
+                .fontWeight(.semibold)
+            Text("Leave password blank to keep the current password.")
+                .foregroundStyle(.secondary)
+            TextField("Group path", text: $model.editEntryGroup)
+            TextField("Title", text: $model.editEntryTitle)
+            TextField("Username", text: $model.editEntryUsername)
+            SecureField("Password", text: $model.editEntryPassword)
+            TextField("URL", text: $model.editEntryURL)
+            TextField("Notes", text: $model.editEntryNotes)
+            HStack {
+                Button("Save") { model.saveEditedEntry() }
                     .keyboardShortcut(.return, modifiers: [])
                 Button("Cancel") { dismiss() }
             }

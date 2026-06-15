@@ -305,6 +305,18 @@ pub extern "C" fn anahtar_rename_group_json(request_json: *const c_char) -> *mut
 pub extern "C" fn anahtar_delete_group_json(request_json: *const c_char) -> *mut c_char {
     request_response(request_json, |request: GroupFfiRequest| {
         let credentials = credentials(&request.password, request.key_file.as_deref());
+        let entries = AnahtarService::list(&request.path, &credentials)
+            .map_err(|error| ffi_error("write_failed", error))?;
+        let entry_count = entries
+            .iter()
+            .filter(|entry| entry_is_in_group(&entry.group_path, &request.group_path))
+            .count();
+        if entry_count > 0 {
+            return Err(FfiError {
+                kind: "write_failed",
+                message: format!("group contains {entry_count} entries"),
+            });
+        }
         AnahtarService::delete_group(
             &request.path,
             &credentials,
@@ -418,6 +430,21 @@ fn required_report(report: Option<WriteReport>) -> anahtar_core::Result<WriteRep
     })
 }
 
+fn entry_is_in_group(entry_group_path: &str, group_path: &str) -> bool {
+    let entry = normalize_group_path(entry_group_path);
+    let group = normalize_group_path(group_path);
+    entry == group || entry.starts_with(&format!("{group}/"))
+}
+
+fn normalize_group_path(path: &str) -> String {
+    path.trim()
+        .trim_matches('/')
+        .strip_prefix("Root/")
+        .or_else(|| path.trim().trim_matches('/').strip_prefix("root/"))
+        .unwrap_or_else(|| path.trim().trim_matches('/'))
+        .to_string()
+}
+
 fn entry_selector(kind: &str, value: String) -> EntrySelector {
     match kind {
         "id" => EntrySelector::Id(value),
@@ -527,6 +554,27 @@ mod tests {
         assert_eq!(value["ok"], false);
         assert_eq!(value["error"]["kind"], "unlock_failed");
         assert!(!json.contains("wrong"));
+    }
+
+    #[test]
+    fn delete_group_rejects_descendant_entries() {
+        let vault = test_vault_path();
+        let request = CString::new(format!(
+            r#"{{"path":"{}","password":"testpass","key_file":null,"group_path":"General","backup_dir":null}}"#,
+            vault.display()
+        ))
+        .unwrap();
+        let ptr = anahtar_delete_group_json(request.as_ptr());
+        let json = unsafe { CStr::from_ptr(ptr) }.to_string_lossy().to_string();
+        unsafe { anahtar_string_free(ptr) };
+
+        let value: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(value["ok"], false);
+        assert_eq!(value["error"]["kind"], "write_failed");
+        assert!(value["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("group contains"));
     }
 
     fn test_vault_path() -> std::path::PathBuf {
