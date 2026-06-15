@@ -34,14 +34,47 @@ struct RootView: View {
     }
 
     private var splitView: some View {
-        NavigationSplitView {
-            GroupListView()
-                .navigationSplitViewColumnWidth(min: 180, ideal: 220)
-        } content: {
-            EntryListView()
-                .navigationSplitViewColumnWidth(min: 240, ideal: 300)
-        } detail: {
-            EntryDetailView()
+        HSplitView {
+            Pane(title: "Groups") {
+                GroupListView()
+            }
+            .frame(minWidth: 190, idealWidth: 230, maxWidth: 320, maxHeight: .infinity)
+
+            Pane(title: "Entries") {
+                EntryListView()
+            }
+            .frame(minWidth: 280, idealWidth: 340, maxWidth: 460, maxHeight: .infinity)
+
+            Pane(title: "Detail") {
+                EntryDetailView()
+            }
+            .frame(minWidth: 360, maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .background(Color(nsColor: .windowBackgroundColor))
+    }
+}
+
+struct Pane<Content: View>: View {
+    let title: String
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(title)
+                .font(.headline)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color(nsColor: .controlBackgroundColor))
+            Divider()
+            content
+        }
+        .frame(maxHeight: .infinity)
+        .background(Color(nsColor: .textBackgroundColor))
+        .overlay(alignment: .trailing) {
+            Rectangle()
+                .fill(Color(nsColor: .separatorColor))
+                .frame(width: 1)
         }
     }
 }
@@ -93,22 +126,50 @@ struct GroupListView: View {
     @EnvironmentObject private var model: AppModel
 
     var body: some View {
-        List(selection: $model.selectedGroup) {
-            Text("All Entries (\(model.entries.count))")
-                .tag(String?.none)
-            ForEach(model.groups.compactMap { groupView($0) }, id: \.path) { group in
-                Text("\(group.name) (\(group.count))")
-                    .padding(.leading, CGFloat(group.depth * 12))
-                    .tag(Optional(group.path))
+        VStack(spacing: 0) {
+            HStack(spacing: 8) {
+                Button("＋") { model.addGroupPrompt() }
+                Button("✎") { model.renameSelectedGroupPrompt() }
+                    .disabled(model.selectedGroup == nil)
+                Button("⌫") { model.deleteSelectedGroup() }
+                    .disabled(model.selectedGroup == nil)
+                Spacer()
+            }
+            .buttonStyle(.borderless)
+            .padding(8)
+            Divider()
+            ScrollView {
+                VStack(spacing: 0) {
+                    groupRow(title: "All Entries", count: model.entries.count, path: nil, depth: 0)
+                    ForEach(model.groups.compactMap { groupView($0) }, id: \.path) { group in
+                        groupRow(title: group.name, count: group.count, path: group.path, depth: group.depth)
+                    }
+                }
             }
         }
-        .navigationTitle("Groups")
-        .toolbar {
-            Button("＋") { model.addGroupPrompt() }
-            Button("✎") { model.renameSelectedGroupPrompt() }
-                .disabled(model.selectedGroup == nil)
-            Button("⌫") { model.deleteSelectedGroup() }
-                .disabled(model.selectedGroup == nil)
+    }
+
+    private func groupRow(title: String, count: Int, path: String?, depth: Int) -> some View {
+        VStack(spacing: 0) {
+            Button {
+                model.selectedGroup = path
+            } label: {
+                HStack {
+                    Text(title)
+                        .fontWeight(model.selectedGroup == path ? .semibold : .regular)
+                    Spacer()
+                    Text("\(count)")
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.leading, CGFloat(10 + depth * 14))
+                .padding(.trailing, 10)
+                .padding(.vertical, 7)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+                .background(model.selectedGroup == path ? Color.accentColor.opacity(0.18) : Color.clear)
+            }
+            .buttonStyle(.plain)
+            Divider()
         }
     }
 
@@ -144,27 +205,24 @@ struct EntryListView: View {
             }
             .padding(8)
             Divider()
-            List(selection: $model.selectedEntryID) {
-                ForEach(model.filteredEntries) { entry in
-                    VStack(alignment: .leading) {
-                        Text(entry.title ?? "<untitled>")
-                            .fontWeight(.semibold)
-                        Text("\(entry.group_path) · \(entry.username ?? "") · \(entry.url ?? "")")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
+            HStack(spacing: 8) {
+                Button("＋") { model.prepareAddEntry() }
+                Button("✎") { model.prepareEditEntry() }
+                    .disabled(model.selectedEntryID == nil)
+                Button("⌫") { model.deleteSelectedEntry() }
+                    .disabled(model.selectedEntryID == nil)
+                Spacer()
+            }
+            .buttonStyle(.borderless)
+            .padding(8)
+            Divider()
+            ScrollView {
+                VStack(spacing: 0) {
+                    ForEach(model.filteredEntries) { entry in
+                        entryRow(entry)
                     }
-                    .tag(Optional(entry.id))
                 }
             }
-        }
-        .navigationTitle("Entries")
-        .toolbar {
-            Button("＋") { model.prepareAddEntry() }
-            Button("✎") { model.prepareEditEntry() }
-                .disabled(model.selectedEntryID == nil)
-            Button("⌫") { model.deleteSelectedEntry() }
-                .disabled(model.selectedEntryID == nil)
         }
         .sheet(isPresented: $model.showAddEntrySheet) {
             AddEntrySheet()
@@ -175,8 +233,31 @@ struct EntryListView: View {
                 .environmentObject(model)
         }
     }
-}
 
+    private func entryRow(_ entry: EntrySummary) -> some View {
+        VStack(spacing: 0) {
+            Button {
+                model.selectedEntryID = entry.id
+            } label: {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(entry.title ?? "<untitled>")
+                        .fontWeight(model.selectedEntryID == entry.id ? .semibold : .regular)
+                    Text("\(entry.group_path) · \(entry.username ?? "") · \(entry.url ?? "")")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+                .background(model.selectedEntryID == entry.id ? Color.accentColor.opacity(0.18) : Color.clear)
+            }
+            .buttonStyle(.plain)
+            Divider()
+        }
+    }
+}
 
 struct AddEntrySheet: View {
     @EnvironmentObject private var model: AppModel
@@ -204,7 +285,6 @@ struct AddEntrySheet: View {
         .frame(width: 460)
     }
 }
-
 
 struct EditEntrySheet: View {
     @EnvironmentObject private var model: AppModel
@@ -295,6 +375,5 @@ struct EntryDetailView: View {
             Spacer()
         }
         .padding(16)
-        .navigationTitle("Detail")
     }
 }
