@@ -27,7 +27,22 @@ final class AppModel: ObservableObject {
     @Published var masterPassword = ""
     @Published var recentVaults: [RecentVault] = []
     @Published var unlocked = false
-    @Published var selectedGroup: String? = nil
+    @Published var selectedGroup: String? = nil {
+        didSet {
+            let selection = selectedGroup ?? Self.allGroupsSelection
+            if selectedGroupSelection != selection {
+                selectedGroupSelection = selection
+            }
+        }
+    }
+    @Published var selectedGroupSelection = AppModel.allGroupsSelection {
+        didSet {
+            let group = selectedGroupSelection == Self.allGroupsSelection ? nil : selectedGroupSelection
+            if selectedGroup != group {
+                selectedGroup = group
+            }
+        }
+    }
     @Published var selectedEntryID: String? = nil {
         didSet {
             if selectedEntryID != oldValue {
@@ -58,6 +73,7 @@ final class AppModel: ObservableObject {
     @Published var auditFindings: [AuditFinding] = []
     @Published var showAuditWindow = false
 
+    static let allGroupsSelection = "__anahtar_all_entries__"
     private static let recentVaultsKey = "AnahtarRecentVaults"
     private let backend = BackendBridge()
     private var sessionPassword = ""

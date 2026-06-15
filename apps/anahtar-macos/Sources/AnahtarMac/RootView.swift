@@ -157,13 +157,13 @@ struct GroupListView: View {
     @EnvironmentObject private var model: AppModel
 
     var body: some View {
-        List(selection: $model.selectedGroup) {
+        List(selection: $model.selectedGroupSelection) {
             Text("All Entries (\(model.entries.count))")
-                .tag(String?.none)
+                .tag(AppModel.allGroupsSelection)
             ForEach(model.groups.compactMap { groupView($0) }, id: \.path) { group in
                 Text("\(group.name) (\(group.count))")
                     .padding(.leading, CGFloat(group.depth * 10))
-                    .tag(Optional(group.path))
+                    .tag(group.path)
             }
         }
         .listStyle(.sidebar)
@@ -224,7 +224,6 @@ struct EntryListView: View {
                 }
             }
         }
-        .navigationTitle("Anahtar")
         .sheet(isPresented: $model.showAddEntrySheet) {
             AddEntrySheet()
                 .environmentObject(model)
