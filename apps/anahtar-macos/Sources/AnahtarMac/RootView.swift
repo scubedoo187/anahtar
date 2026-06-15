@@ -159,11 +159,11 @@ struct GroupListView: View {
     var body: some View {
         List(selection: $model.selectedGroupSelection) {
             Text("All Entries (\(model.entries.count))")
-                .tag(AppModel.allGroupsSelection)
+                .tag(GroupSelection.allEntries)
             ForEach(model.groups.compactMap { groupView($0) }, id: \.path) { group in
                 Text("\(group.name) (\(group.count))")
                     .padding(.leading, CGFloat(group.depth * 10))
-                    .tag(group.path)
+                    .tag(GroupSelection.group(group.path))
             }
         }
         .listStyle(.sidebar)

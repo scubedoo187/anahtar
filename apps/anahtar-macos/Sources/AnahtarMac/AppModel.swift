@@ -12,6 +12,11 @@ struct RecentVault: Codable, Identifiable, Hashable {
     }
 }
 
+enum GroupSelection: Hashable {
+    case allEntries
+    case group(String)
+}
+
 @MainActor
 final class AppModel: ObservableObject {
     @Published var statusMessage = "Native macOS scaffold ready." {
@@ -27,20 +32,16 @@ final class AppModel: ObservableObject {
     @Published var masterPassword = ""
     @Published var recentVaults: [RecentVault] = []
     @Published var unlocked = false
-    @Published var selectedGroup: String? = nil {
-        didSet {
-            let selection = selectedGroup ?? Self.allGroupsSelection
-            if selectedGroupSelection != selection {
-                selectedGroupSelection = selection
+    @Published var selectedGroupSelection = GroupSelection.allEntries
+    var selectedGroup: String? {
+        get {
+            if case let .group(path) = selectedGroupSelection {
+                return path
             }
+            return nil
         }
-    }
-    @Published var selectedGroupSelection = AppModel.allGroupsSelection {
-        didSet {
-            let group = selectedGroupSelection == Self.allGroupsSelection ? nil : selectedGroupSelection
-            if selectedGroup != group {
-                selectedGroup = group
-            }
+        set {
+            selectedGroupSelection = newValue.map(GroupSelection.group) ?? .allEntries
         }
     }
     @Published var selectedEntryID: String? = nil {
@@ -73,7 +74,6 @@ final class AppModel: ObservableObject {
     @Published var auditFindings: [AuditFinding] = []
     @Published var showAuditWindow = false
 
-    static let allGroupsSelection = "__anahtar_all_entries__"
     private static let recentVaultsKey = "AnahtarRecentVaults"
     private let backend = BackendBridge()
     private var sessionPassword = ""
@@ -388,10 +388,10 @@ final class AppModel: ObservableObject {
     }
 
     func search() {
-        updateSearchResults()
+        updateSearchResults(showStatus: true)
     }
 
-    func updateSearchResults() {
+    func updateSearchResults(showStatus: Bool = false) {
         let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         if query.isEmpty {
             visibleEntries = entries
@@ -405,7 +405,9 @@ final class AppModel: ObservableObject {
         selectedEntryID = nil
         selectedDetail = nil
         detailRevealed = false
-        statusMessage = query.isEmpty ? "Showing \(visibleEntries.count) entries." : "Search returned \(visibleEntries.count) entries."
+        if showStatus {
+            statusMessage = query.isEmpty ? "Showing \(visibleEntries.count) entries." : "Search returned \(visibleEntries.count) entries."
+        }
     }
 
     func resetList() {
