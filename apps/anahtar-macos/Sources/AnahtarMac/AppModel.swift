@@ -23,6 +23,7 @@ final class AppModel: ObservableObject {
     @Published var selectedDetail: EntryDetail? = nil
     @Published var detailRevealed = false
     @Published var searchQuery = ""
+    @Published var sidebarCollapsed = false
     @Published var showAddEntrySheet = false
     @Published var showEditEntrySheet = false
     @Published var newEntryGroup = "General/Web"
@@ -287,31 +288,37 @@ final class AppModel: ObservableObject {
     }
 
     func search() {
-        guard unlocked else {
-            statusMessage = "Unlock the vault first."
-            return
+        updateSearchResults()
+    }
+
+    func updateSearchResults() {
+        let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if query.isEmpty {
+            visibleEntries = entries
+        } else {
+            visibleEntries = entries.filter { entry in
+                [entry.title, entry.username, entry.url, Optional(entry.group_path)]
+                    .compactMap { $0?.lowercased() }
+                    .contains { $0.contains(query) }
+            }
         }
-        do {
-            let request = SearchRequest(
-                path: vaultPath,
-                password: currentPasswordForSession(),
-                key_file: optionalKeyFilePath(),
-                query: searchQuery
-            )
-            visibleEntries = try backend.searchEntries(request)
-            selectedEntryID = nil
-            selectedDetail = nil
-            statusMessage = "Search returned \(visibleEntries.count) entries."
-        } catch {
-            statusMessage = error.localizedDescription
-        }
+        selectedEntryID = nil
+        selectedDetail = nil
+        detailRevealed = false
+        statusMessage = query.isEmpty ? "Showing \(visibleEntries.count) entries." : "Search returned \(visibleEntries.count) entries."
     }
 
     func resetList() {
+        searchQuery = ""
         visibleEntries = entries
         selectedEntryID = nil
         selectedDetail = nil
+        detailRevealed = false
         statusMessage = "Showing \(entries.count) entries."
+    }
+
+    func toggleSidebar() {
+        sidebarCollapsed.toggle()
     }
 
     func toggleRevealPassword() {
@@ -394,6 +401,7 @@ final class AppModel: ObservableObject {
         entries = []
         visibleEntries = []
         groups = []
+        searchQuery = ""
         selectedGroup = nil
         selectedEntryID = nil
         selectedDetail = nil

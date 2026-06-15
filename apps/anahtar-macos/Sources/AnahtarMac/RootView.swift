@@ -35,10 +35,15 @@ struct RootView: View {
 
     private var splitView: some View {
         HSplitView {
-            Pane(title: "Groups") {
-                GroupListView()
+            if model.sidebarCollapsed {
+                CollapsedSidebarView()
+                    .frame(minWidth: 44, idealWidth: 44, maxWidth: 44, maxHeight: .infinity)
+            } else {
+                Pane(title: "Groups") {
+                    GroupListView()
+                }
+                .frame(minWidth: 190, idealWidth: 230, maxWidth: 320, maxHeight: .infinity)
             }
-            .frame(minWidth: 190, idealWidth: 230, maxWidth: 320, maxHeight: .infinity)
 
             Pane(title: "Entries") {
                 EntryListView()
@@ -71,6 +76,34 @@ struct Pane<Content: View>: View {
         }
         .frame(maxHeight: .infinity)
         .background(Color(nsColor: .textBackgroundColor))
+        .overlay(alignment: .trailing) {
+            Rectangle()
+                .fill(Color(nsColor: .separatorColor))
+                .frame(width: 1)
+        }
+    }
+}
+
+struct CollapsedSidebarView: View {
+    @EnvironmentObject private var model: AppModel
+
+    var body: some View {
+        VStack(spacing: 10) {
+            Button("›") { model.toggleSidebar() }
+                .buttonStyle(.borderless)
+                .font(.title2)
+                .help("Show sidebar")
+            Text("Groups")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .rotationEffect(.degrees(-90))
+                .fixedSize()
+                .padding(.top, 28)
+            Spacer()
+        }
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(nsColor: .controlBackgroundColor))
         .overlay(alignment: .trailing) {
             Rectangle()
                 .fill(Color(nsColor: .separatorColor))
@@ -128,6 +161,10 @@ struct GroupListView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 8) {
+                Button("‹") { model.toggleSidebar() }
+                    .help("Hide sidebar")
+                Divider()
+                    .frame(height: 18)
                 Button("＋") { model.addGroupPrompt() }
                 Button("✎") { model.renameSelectedGroupPrompt() }
                     .disabled(model.selectedGroup == nil)
@@ -200,6 +237,7 @@ struct EntryListView: View {
                 TextField("Search entries", text: $model.searchQuery)
                     .textFieldStyle(.roundedBorder)
                     .onSubmit { model.search() }
+                    .onChange(of: model.searchQuery) { _ in model.updateSearchResults() }
                 Button("Search") { model.search() }
                 Button("Reset") { model.resetList() }
             }
