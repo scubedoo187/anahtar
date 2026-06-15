@@ -44,6 +44,7 @@ final class AppModel: ObservableObject {
             selectedGroupSelection = newValue.map(GroupSelection.group) ?? .allEntries
         }
     }
+    @Published var focusedEntryID: String? = nil
     @Published var selectedEntryID: String? = nil {
         didSet {
             if selectedEntryID != oldValue {
@@ -239,6 +240,7 @@ final class AppModel: ObservableObject {
             entries = try backend.unlockVault(request)
             visibleEntries = entries
             groups = try backend.listGroups(request)
+            focusedEntryID = entryID
             selectedEntryID = entryID
             selectedDetail = nil
             detailRevealed = false
@@ -375,6 +377,7 @@ final class AppModel: ObservableObject {
             visibleEntries = loadedEntries
             groups = loadedGroups
             selectedGroup = nil
+            focusedEntryID = nil
             selectedEntryID = nil
             selectedDetail = nil
             detailRevealed = false
@@ -403,6 +406,7 @@ final class AppModel: ObservableObject {
                     .contains { $0.contains(query) }
             }
         }
+        focusedEntryID = nil
         selectedEntryID = nil
         selectedDetail = nil
         detailRevealed = false
@@ -414,6 +418,7 @@ final class AppModel: ObservableObject {
     func resetList() {
         searchQuery = ""
         visibleEntries = entries
+        focusedEntryID = nil
         selectedEntryID = nil
         selectedDetail = nil
         detailRevealed = false
@@ -489,6 +494,44 @@ final class AppModel: ObservableObject {
         }
     }
 
+
+    func focusEntry(_ entryID: String) {
+        focusedEntryID = entryID
+    }
+
+    func selectEntry(_ entryID: String) {
+        focusedEntryID = entryID
+        selectedEntryID = entryID
+    }
+
+    func selectAdjacentEntry(delta: Int) {
+        let candidates = filteredEntries
+        guard !candidates.isEmpty else { return }
+        let currentID = focusedEntryID ?? selectedEntryID
+        let currentIndex = currentID.flatMap { id in candidates.firstIndex { $0.id == id } }
+        let nextIndex: Int
+        if let currentIndex {
+            nextIndex = min(max(currentIndex + delta, 0), candidates.count - 1)
+        } else {
+            nextIndex = delta < 0 ? candidates.count - 1 : 0
+        }
+        focusedEntryID = candidates[nextIndex].id
+    }
+
+    func openSelectedEntryDetail() {
+        guard let entryID = focusedEntryID ?? selectedEntryID else { return }
+        let previousEntryID = selectedEntryID
+        selectedEntryID = entryID
+        if previousEntryID == entryID {
+            loadSelectedDetail(revealPassword: false)
+        }
+    }
+
+    func copyValue(_ value: String, label: String) {
+        guard !value.isEmpty else { return }
+        copyWithOwnedClear(value, label: label)
+    }
+
     func focusSearch() {
         guard unlocked else { return }
         searchFocusRequest += 1
@@ -503,6 +546,7 @@ final class AppModel: ObservableObject {
         groups = []
         searchQuery = ""
         selectedGroup = nil
+        focusedEntryID = nil
         selectedEntryID = nil
         selectedDetail = nil
         detailRevealed = false
@@ -523,6 +567,7 @@ final class AppModel: ObservableObject {
             entries = try backend.unlockVault(request)
             groups = try backend.listGroups(request)
             visibleEntries = entries
+            focusedEntryID = nil
             selectedEntryID = nil
             selectedDetail = nil
             detailRevealed = false

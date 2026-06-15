@@ -41,6 +41,21 @@ struct RootView: View {
 }
 
 
+
+private extension View {
+    @ViewBuilder
+    func onReturnKeyCompat(_ action: @escaping () -> Void) -> some View {
+        if #available(macOS 14.0, *) {
+            self.onKeyPress(.return) {
+                action()
+                return .handled
+            }
+        } else {
+            self
+        }
+    }
+}
+
 struct ToastView: View {
     let message: String
 
@@ -188,6 +203,7 @@ struct GroupListView: View {
 struct EntryListView: View {
     @EnvironmentObject private var model: AppModel
     @FocusState private var searchFocused: Bool
+    @FocusState private var listFocused: Bool
 
     var body: some View {
         VStack(spacing: 0) {
@@ -228,7 +244,23 @@ struct EntryListView: View {
                     }
                 }
             }
+            .focusable(true)
+            .focused($listFocused)
+            .onMoveCommand { direction in
+                switch direction {
+                case .up:
+                    model.selectAdjacentEntry(delta: -1)
+                case .down:
+                    model.selectAdjacentEntry(delta: 1)
+                default:
+                    break
+                }
+            }
+            .onReturnKeyCompat {
+                model.openSelectedEntryDetail()
+            }
         }
+        .onAppear { listFocused = true }
         .onChange(of: model.searchFocusRequest) { _ in
             searchFocused = true
         }
@@ -245,7 +277,8 @@ struct EntryListView: View {
     private func entryRow(_ entry: EntrySummary) -> some View {
         VStack(spacing: 0) {
             Button {
-                model.selectedEntryID = entry.id
+                model.selectEntry(entry.id)
+                listFocused = true
             } label: {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(entry.title ?? "<untitled>")
@@ -259,11 +292,21 @@ struct EntryListView: View {
                 .padding(.vertical, 8)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(Rectangle())
-                .background(model.selectedEntryID == entry.id ? Color.accentColor.opacity(0.18) : Color.clear)
+                .background(entryBackground(entry))
             }
             .buttonStyle(.plain)
             Divider()
         }
+    }
+
+    private func entryBackground(_ entry: EntrySummary) -> Color {
+        if model.focusedEntryID == entry.id {
+            return Color.accentColor.opacity(0.22)
+        }
+        if model.selectedEntryID == entry.id {
+            return Color.accentColor.opacity(0.12)
+        }
+        return Color.clear
     }
 }
 
@@ -387,6 +430,50 @@ struct AuditResultsWindow: View {
     }
 }
 
+
+struct DetailAttributeRow<Actions: View>: View {
+    let label: String
+    let value: String
+    let copy: () -> Void
+    let actions: Actions
+    @FocusState private var focused: Bool
+
+    init(label: String, value: String, copy: @escaping () -> Void, @ViewBuilder actions: () -> Actions) {
+        self.label = label
+        self.value = value
+        self.copy = copy
+        self.actions = actions()
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Text(label)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.secondary)
+                    .frame(width: 90, alignment: .leading)
+                Text(value)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                HStack(spacing: 4) {
+                    actions
+                }
+            }
+            .padding(.vertical, 5)
+            .padding(.horizontal, 4)
+            .background(focused ? Color.accentColor.opacity(0.14) : Color.clear)
+            .contentShape(Rectangle())
+            .focusable(true)
+            .focused($focused)
+            .onTapGesture(count: 2) { copy() }
+            .onReturnKeyCompat {
+                copy()
+            }
+            Divider()
+        }
+    }
+}
+
 struct EntryDetailView: View {
     @EnvironmentObject private var model: AppModel
 
@@ -405,33 +492,41 @@ struct EntryDetailView: View {
                         .buttonStyle(.borderless)
                         .help("Delete entry")
                 }
-                detailRow("ID", detail.id)
-                detailRow("Group", detail.group_path)
-                detailRow("Username", detail.username ?? "") {
+                copyableDetailRow("ID", detail.id) { copyToClipboard(detail.id, label: "ID") }
+                copyableDetailRow("Group", detail.group_path) { copyToClipboard(detail.group_path, label: "group") }
+                copyableDetailRow("Username", detail.username ?? "") {
+                    model.copyUsername()
+                } actions: {
                     inlineAction("⧉", "Copy username") { model.copyUsername() }
                         .disabled((detail.username ?? "").isEmpty)
                 }
-                detailRow("Password", model.detailRevealed ? (detail.password ?? "") : "<hidden>") {
+                copyableDetailRow("Password", model.detailRevealed ? (detail.password ?? "") : "<hidden>") {
+                    model.copyPassword()
+                } actions: {
                     inlineAction("⧉", "Copy password") { model.copyPassword() }
                     inlineAction(model.detailRevealed ? "🙈" : "👁", model.detailRevealed ? "Hide password" : "Reveal password") {
                         model.toggleRevealPassword()
                     }
                 }
-                detailRow("URL", detail.url ?? "") {
+                copyableDetailRow("URL", detail.url ?? "") {
+                    model.copyURL()
+                } actions: {
                     inlineAction("⧉", "Copy URL") { model.copyURL() }
                         .disabled((detail.url ?? "").isEmpty)
                 }
-                detailRow("TOTP", detail.has_totp ? "one-time code available" : "No TOTP code available") {
+                copyableDetailRow("TOTP", detail.has_totp ? "one-time code available" : "No TOTP code available") {
+                    model.copyTotp()
+                } actions: {
                     inlineAction("⧉", "Copy TOTP") { model.copyTotp() }
                         .disabled(!detail.has_totp)
                 }
-                detailRow("Notes", detail.notes ?? "")
+                copyableDetailRow("Notes", detail.notes ?? "") { copyToClipboard(detail.notes ?? "", label: "notes") }
                 if !detail.custom_fields.isEmpty {
                     Divider()
                     Text("Custom fields")
                         .font(.headline)
                     ForEach(detail.custom_fields) { field in
-                        detailRow(field.key, field.value)
+                        copyableDetailRow(field.key, field.value) { copyToClipboard(field.value, label: field.key) }
                     }
                 }
             } else {
@@ -450,6 +545,24 @@ struct EntryDetailView: View {
         }
         .padding(16)
         .navigationTitle("Detail")
+    }
+
+    private func copyableDetailRow(_ label: String, _ value: String, copy: @escaping () -> Void) -> some View {
+        copyableDetailRow(label, value, copy: copy) { EmptyView() }
+    }
+
+    private func copyableDetailRow<Actions: View>(
+        _ label: String,
+        _ value: String,
+        copy: @escaping () -> Void,
+        @ViewBuilder actions: () -> Actions
+    ) -> some View {
+        DetailAttributeRow(label: label, value: value, copy: copy, actions: actions)
+    }
+
+    private func copyToClipboard(_ value: String, label: String) {
+        guard !value.isEmpty else { return }
+        model.copyValue(value, label: label)
     }
 
     private func detailRow(_ label: String, _ value: String) -> some View {
