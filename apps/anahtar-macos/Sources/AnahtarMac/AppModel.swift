@@ -540,7 +540,9 @@ final class AppModel: ObservableObject {
         } else {
             nextIndex = delta < 0 ? candidates.count - 1 : 0
         }
-        focusedEntryID = candidates[nextIndex].id
+        let nextEntryID = candidates[nextIndex].id
+        focusedEntryID = nextEntryID
+        selectedEntryID = nextEntryID
     }
 
     func openSelectedEntryDetail() {
