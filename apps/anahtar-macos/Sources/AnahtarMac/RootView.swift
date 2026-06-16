@@ -219,12 +219,8 @@ struct GroupListView: View {
                         .tag(GroupSelection.group(group.path))
                 }
             }
-            .listStyle(.plain)
-            .scrollContentBackground(.hidden)
-            .background(Color(nsColor: .controlBackgroundColor))
+            .listStyle(.sidebar)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(nsColor: .controlBackgroundColor))
     }
 
     private func groupView(_ group: GroupSummary) -> (path: String, name: String, depth: Int, count: Int)? {
