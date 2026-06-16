@@ -77,6 +77,7 @@ final class AppModel: ObservableObject {
     @Published var auditFindings: [AuditFinding] = []
     @Published var showAuditWindow = false
 
+    private static let trashGroupPath = "Trash"
     private static let recentVaultsKey = "AnahtarRecentVaults"
     private let backend = BackendBridge()
     private var sessionPassword = ""
@@ -159,7 +160,8 @@ final class AppModel: ObservableObject {
                     url: emptyToNil(newEntryURL),
                     notes: emptyToNil(newEntryNotes)
                 ),
-                backup_dir: nil
+                backup_dir: nil,
+                no_backup: true
             ))
             showAddEntrySheet = false
             refreshAfterWrite(selecting: report.changed_entry_id)
@@ -171,17 +173,20 @@ final class AppModel: ObservableObject {
 
     func deleteSelectedEntry() {
         guard unlocked, let selectedEntryID else { return }
-        guard confirm(title: "Delete Entry", message: "Delete the selected entry? A backup will be created before the vault is replaced.") else { return }
+        guard confirm(title: "Move Entry to Trash", message: "Move the selected entry to the Trash group? The vault file will not be backed up for this soft delete.") else { return }
         do {
-            let report = try backend.deleteEntry(EntryIdFfiRequest(
+            try ensureTrashGroupExists()
+            let report = try backend.moveEntry(MoveEntryFfiRequest(
                 path: vaultPath,
                 password: currentPasswordForSession(),
                 key_file: optionalKeyFilePath(),
                 entry_id: selectedEntryID,
-                backup_dir: nil
+                group_path: Self.trashGroupPath,
+                backup_dir: nil,
+                no_backup: true
             ))
             refreshAfterWrite(selecting: nil)
-            statusMessage = writeStatus(report)
+            statusMessage = "Moved entry to Trash. \(writeStatus(report))"
         } catch {
             statusMessage = error.localizedDescription
         }
@@ -190,7 +195,7 @@ final class AppModel: ObservableObject {
     func addGroupPrompt() {
         guard unlocked, let value = prompt(title: "New Group", message: "Enter the full group path:", defaultValue: selectedGroup.map { "\($0)/" } ?? "") else { return }
         do {
-            let report = try backend.addGroup(GroupFfiRequest(path: vaultPath, password: currentPasswordForSession(), key_file: optionalKeyFilePath(), group_path: value, backup_dir: nil))
+            let report = try backend.addGroup(GroupFfiRequest(path: vaultPath, password: currentPasswordForSession(), key_file: optionalKeyFilePath(), group_path: value, backup_dir: nil, no_backup: false))
             refreshAfterWrite(selecting: nil)
             selectedGroup = value
             statusMessage = writeStatus(report)
@@ -202,7 +207,7 @@ final class AppModel: ObservableObject {
     func renameSelectedGroupPrompt() {
         guard unlocked, let selectedGroup, let value = prompt(title: "Rename Group", message: "Enter the new group name:", defaultValue: selectedGroup.split(separator: "/").last.map(String.init) ?? selectedGroup) else { return }
         do {
-            let report = try backend.renameGroup(RenameGroupFfiRequest(path: vaultPath, password: currentPasswordForSession(), key_file: optionalKeyFilePath(), group_path: selectedGroup, new_name: value, backup_dir: nil))
+            let report = try backend.renameGroup(RenameGroupFfiRequest(path: vaultPath, password: currentPasswordForSession(), key_file: optionalKeyFilePath(), group_path: selectedGroup, new_name: value, backup_dir: nil, no_backup: false))
             refreshAfterWrite(selecting: nil)
             statusMessage = writeStatus(report)
         } catch {
@@ -214,7 +219,7 @@ final class AppModel: ObservableObject {
         guard unlocked, let selectedGroup else { return }
         guard confirm(title: "Delete Group", message: "Delete empty group \"\(selectedGroup)\"? This cannot be undone.") else { return }
         do {
-            let report = try backend.deleteGroup(GroupFfiRequest(path: vaultPath, password: currentPasswordForSession(), key_file: optionalKeyFilePath(), group_path: selectedGroup, backup_dir: nil))
+            let report = try backend.deleteGroup(GroupFfiRequest(path: vaultPath, password: currentPasswordForSession(), key_file: optionalKeyFilePath(), group_path: selectedGroup, backup_dir: nil, no_backup: false))
             self.selectedGroup = nil
             refreshAfterWrite(selecting: nil)
             statusMessage = writeStatus(report)
@@ -233,6 +238,23 @@ final class AppModel: ObservableObject {
         } catch {
             statusMessage = error.localizedDescription
         }
+    }
+
+
+    private func ensureTrashGroupExists() throws {
+        let trashPath = normalizeGroupPath(Self.trashGroupPath)
+        if groups.contains(where: { normalizeGroupPath($0.path) == trashPath }) {
+            return
+        }
+        _ = try backend.addGroup(GroupFfiRequest(
+            path: vaultPath,
+            password: currentPasswordForSession(),
+            key_file: optionalKeyFilePath(),
+            group_path: Self.trashGroupPath,
+            backup_dir: nil,
+            no_backup: true
+        ))
+        groups = try backend.listGroups(vaultRequest())
     }
 
     private func refreshAfterWrite(selecting entryID: String?) {
@@ -289,7 +311,8 @@ final class AppModel: ObservableObject {
                     url: emptyToNil(editEntryURL),
                     notes: emptyToNil(editEntryNotes)
                 ),
-                backup_dir: nil
+                backup_dir: nil,
+                no_backup: true
             ))
             let originalGroup = normalizeGroupPath(original.group_path)
             if group != originalGroup {
@@ -299,7 +322,8 @@ final class AppModel: ObservableObject {
                     key_file: optionalKeyFilePath(),
                     entry_id: selectedEntryID,
                     group_path: group,
-                    backup_dir: nil
+                    backup_dir: nil,
+                    no_backup: false
                 ))
             }
             showEditEntrySheet = false

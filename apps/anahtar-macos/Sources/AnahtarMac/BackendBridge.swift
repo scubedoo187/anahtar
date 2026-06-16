@@ -106,6 +106,7 @@ struct AddEntryFfiRequest: Codable {
     let key_file: String?
     let entry: AddEntryInput
     let backup_dir: String?
+    let no_backup: Bool
 }
 
 struct EditEntryFfiRequest: Codable {
@@ -115,6 +116,7 @@ struct EditEntryFfiRequest: Codable {
     let entry_id: String
     let entry: EditEntryInput
     let backup_dir: String?
+    let no_backup: Bool
 }
 
 struct EntryIdFfiRequest: Codable {
@@ -123,6 +125,7 @@ struct EntryIdFfiRequest: Codable {
     let key_file: String?
     let entry_id: String
     let backup_dir: String?
+    let no_backup: Bool
 }
 
 struct GroupFfiRequest: Codable {
@@ -131,6 +134,7 @@ struct GroupFfiRequest: Codable {
     let key_file: String?
     let group_path: String
     let backup_dir: String?
+    let no_backup: Bool
 }
 
 struct RenameGroupFfiRequest: Codable {
@@ -140,6 +144,7 @@ struct RenameGroupFfiRequest: Codable {
     let group_path: String
     let new_name: String
     let backup_dir: String?
+    let no_backup: Bool
 }
 
 struct MoveEntryFfiRequest: Codable {
@@ -149,6 +154,7 @@ struct MoveEntryFfiRequest: Codable {
     let entry_id: String
     let group_path: String
     let backup_dir: String?
+    let no_backup: Bool
 }
 
 struct EntrySummary: Decodable, Identifiable, Hashable {

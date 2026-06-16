@@ -9,10 +9,11 @@ use anahtar_core::{
     delete_entry_save_as_with_credentials, delete_group_save_as_with_credentials,
     edit_entry_save_as_with_credentials, inspect_header, list_entries, list_groups,
     move_entry_save_as_with_credentials, open_database_with_credentials,
-    rename_group_save_as_with_credentials, safe_in_place_write_with_credentials, search_entries,
-    show_entry_by_selector, totp_code_by_selector, AddEntryRequest, AuditReport, EditEntryRequest,
-    EntryDetail, EntrySelector, EntrySummary, GroupSummary, InPlaceOptions, Result, SaveAsOptions,
-    TotpCode, VaultCredentials, VaultInfo, WriteReport,
+    rename_group_save_as_with_credentials, safe_in_place_write_with_credentials,
+    safe_in_place_write_without_backup_with_credentials, search_entries, show_entry_by_selector,
+    totp_code_by_selector, AddEntryRequest, AuditReport, EditEntryRequest, EntryDetail,
+    EntrySelector, EntrySummary, GroupSummary, InPlaceOptions, Result, SaveAsOptions, TotpCode,
+    VaultCredentials, VaultInfo, WriteReport,
 };
 use std::path::{Path, PathBuf};
 
@@ -20,6 +21,7 @@ use std::path::{Path, PathBuf};
 pub enum WriteMode {
     SaveAs { output_path: PathBuf, force: bool },
     InPlace { backup_dir: Option<PathBuf> },
+    InPlaceNoBackup,
     DryRun,
 }
 
@@ -96,13 +98,8 @@ impl AnahtarService {
                 request,
             )
             .map(Some),
-            WriteMode::InPlace { backup_dir } => safe_in_place_write_with_credentials(
-                credentials,
-                InPlaceOptions {
-                    target_path: input_path.to_path_buf(),
-                    backup_dir,
-                },
-                |input, output| {
+            mode @ (WriteMode::InPlace { .. } | WriteMode::InPlaceNoBackup) => {
+                write_in_place(credentials, input_path, mode, |input, output| {
                     add_entry_save_as_with_credentials(
                         input,
                         credentials,
@@ -112,9 +109,9 @@ impl AnahtarService {
                         },
                         request,
                     )
-                },
-            )
-            .map(Some),
+                })
+                .map(Some)
+            }
         }
     }
 
@@ -136,13 +133,8 @@ impl AnahtarService {
                 request,
             )
             .map(Some),
-            WriteMode::InPlace { backup_dir } => safe_in_place_write_with_credentials(
-                credentials,
-                InPlaceOptions {
-                    target_path: input_path.to_path_buf(),
-                    backup_dir,
-                },
-                |input, output| {
+            mode @ (WriteMode::InPlace { .. } | WriteMode::InPlaceNoBackup) => {
+                write_in_place(credentials, input_path, mode, |input, output| {
                     edit_entry_save_as_with_credentials(
                         input,
                         selector_id,
@@ -153,9 +145,9 @@ impl AnahtarService {
                         },
                         request,
                     )
-                },
-            )
-            .map(Some),
+                })
+                .map(Some)
+            }
         }
     }
 
@@ -175,13 +167,8 @@ impl AnahtarService {
                 SaveAsOptions { output_path, force },
             )
             .map(Some),
-            WriteMode::InPlace { backup_dir } => safe_in_place_write_with_credentials(
-                credentials,
-                InPlaceOptions {
-                    target_path: input_path.to_path_buf(),
-                    backup_dir,
-                },
-                |input, output| {
+            mode @ (WriteMode::InPlace { .. } | WriteMode::InPlaceNoBackup) => {
+                write_in_place(credentials, input_path, mode, |input, output| {
                     delete_entry_save_as_with_credentials(
                         input,
                         entry_id,
@@ -191,9 +178,9 @@ impl AnahtarService {
                             force: false,
                         },
                     )
-                },
-            )
-            .map(Some),
+                })
+                .map(Some)
+            }
         }
     }
 
@@ -213,13 +200,8 @@ impl AnahtarService {
                 group_path,
             )
             .map(Some),
-            WriteMode::InPlace { backup_dir } => safe_in_place_write_with_credentials(
-                credentials,
-                InPlaceOptions {
-                    target_path: input_path.to_path_buf(),
-                    backup_dir,
-                },
-                |input, output| {
+            mode @ (WriteMode::InPlace { .. } | WriteMode::InPlaceNoBackup) => {
+                write_in_place(credentials, input_path, mode, |input, output| {
                     add_group_save_as_with_credentials(
                         input,
                         credentials,
@@ -229,9 +211,9 @@ impl AnahtarService {
                         },
                         group_path,
                     )
-                },
-            )
-            .map(Some),
+                })
+                .map(Some)
+            }
         }
     }
 
@@ -253,13 +235,8 @@ impl AnahtarService {
                 new_name,
             )
             .map(Some),
-            WriteMode::InPlace { backup_dir } => safe_in_place_write_with_credentials(
-                credentials,
-                InPlaceOptions {
-                    target_path: input_path.to_path_buf(),
-                    backup_dir,
-                },
-                |input, output| {
+            mode @ (WriteMode::InPlace { .. } | WriteMode::InPlaceNoBackup) => {
+                write_in_place(credentials, input_path, mode, |input, output| {
                     rename_group_save_as_with_credentials(
                         input,
                         credentials,
@@ -270,9 +247,9 @@ impl AnahtarService {
                         group_path,
                         new_name,
                     )
-                },
-            )
-            .map(Some),
+                })
+                .map(Some)
+            }
         }
     }
 
@@ -292,13 +269,8 @@ impl AnahtarService {
                 group_path,
             )
             .map(Some),
-            WriteMode::InPlace { backup_dir } => safe_in_place_write_with_credentials(
-                credentials,
-                InPlaceOptions {
-                    target_path: input_path.to_path_buf(),
-                    backup_dir,
-                },
-                |input, output| {
+            mode @ (WriteMode::InPlace { .. } | WriteMode::InPlaceNoBackup) => {
+                write_in_place(credentials, input_path, mode, |input, output| {
                     delete_group_save_as_with_credentials(
                         input,
                         credentials,
@@ -308,9 +280,9 @@ impl AnahtarService {
                         },
                         group_path,
                     )
-                },
-            )
-            .map(Some),
+                })
+                .map(Some)
+            }
         }
     }
 
@@ -332,13 +304,8 @@ impl AnahtarService {
                 group_path,
             )
             .map(Some),
-            WriteMode::InPlace { backup_dir } => safe_in_place_write_with_credentials(
-                credentials,
-                InPlaceOptions {
-                    target_path: input_path.to_path_buf(),
-                    backup_dir,
-                },
-                |input, output| {
+            mode @ (WriteMode::InPlace { .. } | WriteMode::InPlaceNoBackup) => {
+                write_in_place(credentials, input_path, mode, |input, output| {
                     move_entry_save_as_with_credentials(
                         input,
                         credentials,
@@ -349,9 +316,41 @@ impl AnahtarService {
                         selector,
                         group_path,
                     )
-                },
-            )
-            .map(Some),
+                })
+                .map(Some)
+            }
+        }
+    }
+}
+
+fn write_in_place<F>(
+    credentials: &VaultCredentials,
+    input_path: &Path,
+    mode: WriteMode,
+    save_as: F,
+) -> Result<WriteReport>
+where
+    F: FnOnce(&Path, &Path) -> Result<WriteReport>,
+{
+    match mode {
+        WriteMode::InPlace { backup_dir } => safe_in_place_write_with_credentials(
+            credentials,
+            InPlaceOptions {
+                target_path: input_path.to_path_buf(),
+                backup_dir,
+            },
+            save_as,
+        ),
+        WriteMode::InPlaceNoBackup => safe_in_place_write_without_backup_with_credentials(
+            credentials,
+            InPlaceOptions {
+                target_path: input_path.to_path_buf(),
+                backup_dir: None,
+            },
+            save_as,
+        ),
+        WriteMode::SaveAs { .. } | WriteMode::DryRun => {
+            unreachable!("write_in_place only accepts in-place modes")
         }
     }
 }
@@ -404,5 +403,38 @@ mod tests {
         .unwrap();
         assert_eq!(report.output_path, output);
         assert!(report.changed_entry_id.is_some());
+    }
+    #[test]
+    fn service_in_place_no_backup_add_entry_flow() {
+        let vault = generated_vault();
+        if !vault.exists() {
+            return;
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("app-no-backup.kdbx");
+        std::fs::copy(vault, &target).unwrap();
+        let credentials = VaultCredentials::password_only("testpass");
+        let report = AnahtarService::add_entry(
+            &target,
+            &credentials,
+            AddEntryRequest {
+                group_path: "General/Web".to_string(),
+                title: "No Backup Example".to_string(),
+                username: Some("nobackup@example.com".to_string()),
+                password: Some("no-backup-password".to_string()),
+                url: None,
+                notes: None,
+            },
+            WriteMode::InPlaceNoBackup,
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(report.output_path, target);
+        assert_eq!(
+            report.final_target_path.as_deref(),
+            Some(report.output_path.as_path())
+        );
+        assert!(report.backup_path.is_none());
+        assert!(!dir.path().join("anahtar-backups").exists());
     }
 }

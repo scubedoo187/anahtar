@@ -26,7 +26,10 @@ The local bundle is unsigned and intended for alpha smoke testing only. Producti
 - Native file picker for vault and key-file selection.
 - Rust FFI bridge for backend status, unlock/list/search/show, TOTP, groups, audit, and writes.
 - Clipboard copy uses `NSPasteboard` and clears only if Anahtar still owns the clipboard value.
-- Writes go through Rust `AnahtarService` with safe in-place backup behavior.
+- Writes go through Rust `AnahtarService`.
+- Entry add/edit use verified in-place writes without full-file backups.
+- Entry delete is a soft delete: the entry is moved to the default `Trash` group, creating that group on first use.
+- Group-level operations still use safe in-place backup behavior.
 
 ## Safety reminders
 

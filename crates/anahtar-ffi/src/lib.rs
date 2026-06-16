@@ -113,6 +113,8 @@ struct AddEntryFfiRequest {
     key_file: Option<String>,
     entry: AddEntryInput,
     backup_dir: Option<String>,
+    #[serde(default)]
+    no_backup: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -123,6 +125,8 @@ struct EditEntryFfiRequest {
     entry_id: String,
     entry: EditEntryInput,
     backup_dir: Option<String>,
+    #[serde(default)]
+    no_backup: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -132,6 +136,8 @@ struct EntryIdFfiRequest {
     key_file: Option<String>,
     entry_id: String,
     backup_dir: Option<String>,
+    #[serde(default)]
+    no_backup: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -141,6 +147,8 @@ struct GroupFfiRequest {
     key_file: Option<String>,
     group_path: String,
     backup_dir: Option<String>,
+    #[serde(default)]
+    no_backup: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -151,6 +159,8 @@ struct RenameGroupFfiRequest {
     group_path: String,
     new_name: String,
     backup_dir: Option<String>,
+    #[serde(default)]
+    no_backup: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -161,6 +171,8 @@ struct MoveEntryFfiRequest {
     entry_id: String,
     group_path: String,
     backup_dir: Option<String>,
+    #[serde(default)]
+    no_backup: bool,
 }
 
 #[no_mangle]
@@ -232,7 +244,7 @@ pub extern "C" fn anahtar_add_entry_json(request_json: *const c_char) -> *mut c_
             &request.path,
             &credentials,
             request.entry.into(),
-            in_place(request.backup_dir),
+            write_mode(request.backup_dir, request.no_backup),
         )
         .and_then(required_report)
         .map_err(|error| ffi_error("write_failed", error))
@@ -248,7 +260,7 @@ pub extern "C" fn anahtar_edit_entry_json(request_json: *const c_char) -> *mut c
             &credentials,
             &request.entry_id,
             request.entry.into(),
-            in_place(request.backup_dir),
+            write_mode(request.backup_dir, request.no_backup),
         )
         .and_then(required_report)
         .map_err(|error| ffi_error("write_failed", error))
@@ -263,7 +275,7 @@ pub extern "C" fn anahtar_delete_entry_json(request_json: *const c_char) -> *mut
             &request.path,
             &credentials,
             &request.entry_id,
-            in_place(request.backup_dir),
+            write_mode(request.backup_dir, request.no_backup),
         )
         .and_then(required_report)
         .map_err(|error| ffi_error("write_failed", error))
@@ -278,7 +290,7 @@ pub extern "C" fn anahtar_add_group_json(request_json: *const c_char) -> *mut c_
             &request.path,
             &credentials,
             &request.group_path,
-            in_place(request.backup_dir),
+            write_mode(request.backup_dir, request.no_backup),
         )
         .and_then(required_report)
         .map_err(|error| ffi_error("write_failed", error))
@@ -294,7 +306,7 @@ pub extern "C" fn anahtar_rename_group_json(request_json: *const c_char) -> *mut
             &credentials,
             &request.group_path,
             &request.new_name,
-            in_place(request.backup_dir),
+            write_mode(request.backup_dir, request.no_backup),
         )
         .and_then(required_report)
         .map_err(|error| ffi_error("write_failed", error))
@@ -321,7 +333,7 @@ pub extern "C" fn anahtar_delete_group_json(request_json: *const c_char) -> *mut
             &request.path,
             &credentials,
             &request.group_path,
-            in_place(request.backup_dir),
+            write_mode(request.backup_dir, request.no_backup),
         )
         .and_then(required_report)
         .map_err(|error| ffi_error("write_failed", error))
@@ -337,7 +349,7 @@ pub extern "C" fn anahtar_move_entry_json(request_json: *const c_char) -> *mut c
             &credentials,
             &EntrySelector::Id(request.entry_id),
             &request.group_path,
-            in_place(request.backup_dir),
+            write_mode(request.backup_dir, request.no_backup),
         )
         .and_then(required_report)
         .map_err(|error| ffi_error("write_failed", error))
@@ -416,7 +428,10 @@ fn credentials(password: &str, key_file: Option<&str>) -> VaultCredentials {
     }
 }
 
-fn in_place(backup_dir: Option<String>) -> WriteMode {
+fn write_mode(backup_dir: Option<String>, no_backup: bool) -> WriteMode {
+    if no_backup {
+        return WriteMode::InPlaceNoBackup;
+    }
     WriteMode::InPlace {
         backup_dir: backup_dir
             .filter(|value| !value.trim().is_empty())

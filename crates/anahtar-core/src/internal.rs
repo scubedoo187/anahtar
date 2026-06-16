@@ -986,6 +986,58 @@ pub fn move_entry_save_as_with_credentials(
     ))
 }
 
+pub fn safe_in_place_write_without_backup_with_credentials<F>(
+    credentials: &VaultCredentials,
+    options: InPlaceOptions,
+    save_as: F,
+) -> Result<WriteReport>
+where
+    F: FnOnce(&Path, &Path) -> Result<WriteReport>,
+{
+    let target = options.target_path;
+    let tmp = temp_in_place_path_for(&target)?;
+
+    if tmp.exists() {
+        return Err(AnahtarError::TempOutputExists(tmp));
+    }
+
+    let write_result = (|| -> Result<WriteReport> {
+        let mut report = save_as(&target, &tmp)?;
+        let verified = open_database_with_credentials(&tmp, credentials)?;
+        if count_groups(&verified) != report.output_group_count
+            || verified.iter_all_entries().count() != report.output_entry_count
+        {
+            return Err(AnahtarError::VerificationFailed(
+                "temporary in-place verification count mismatch".to_string(),
+            ));
+        }
+
+        replace_target_with_tmp_without_backup(&tmp, &target)?;
+
+        let final_verified = open_database_with_credentials(&target, credentials)?;
+        if count_groups(&final_verified) != report.output_group_count
+            || final_verified.iter_all_entries().count() != report.output_entry_count
+        {
+            return Err(AnahtarError::VerificationFailed(
+                "final in-place verification count mismatch".to_string(),
+            ));
+        }
+
+        report.output_path = target.clone();
+        report.backup_path = None;
+        report.final_target_path = Some(target.clone());
+        Ok(report)
+    })();
+
+    match write_result {
+        Ok(report) => Ok(report),
+        Err(err) => {
+            let _ = std::fs::remove_file(&tmp);
+            Err(err)
+        }
+    }
+}
+
 pub fn safe_in_place_write_with_credentials<F>(
     credentials: &VaultCredentials,
     options: InPlaceOptions,
@@ -1048,6 +1100,23 @@ where
         Err(err) => {
             let _ = std::fs::remove_file(&tmp);
             Err(err)
+        }
+    }
+}
+
+fn replace_target_with_tmp_without_backup(tmp: &Path, target: &Path) -> Result<()> {
+    match std::fs::rename(tmp, target) {
+        Ok(()) => Ok(()),
+        Err(err) => {
+            #[cfg(windows)]
+            {
+                if target.exists() {
+                    std::fs::remove_file(target)?;
+                    std::fs::rename(tmp, target)?;
+                    return Ok(());
+                }
+            }
+            Err(err.into())
         }
     }
 }

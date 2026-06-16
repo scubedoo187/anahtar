@@ -589,7 +589,7 @@ struct EntryDetailView: View {
                         .help("Edit entry")
                     Button("⌫") { model.deleteSelectedEntry() }
                         .buttonStyle(.borderless)
-                        .help("Delete entry")
+                        .help("Move entry to Trash")
                 }
                 copyableDetailRow("ID", detail.id) { copyToClipboard(detail.id, label: "ID") }
                 copyableDetailRow("Group", detail.group_path) { copyToClipboard(detail.group_path, label: "group") }
