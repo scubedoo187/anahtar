@@ -221,9 +221,6 @@ struct GroupListView: View {
             }
             .listStyle(.sidebar)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(nsColor: .windowBackgroundColor))
-        .ignoresSafeArea(.container, edges: [.top, .bottom])
     }
 
     private func groupView(_ group: GroupSummary) -> (path: String, name: String, depth: Int, count: Int)? {
